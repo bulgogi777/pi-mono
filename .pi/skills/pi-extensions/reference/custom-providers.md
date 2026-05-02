@@ -38,7 +38,7 @@ Field reference (`types.ts:1318-1357`):
 | `models` | `ProviderModelConfig[]?` | Optional | If set, replaces all models for the provider. |
 | `oauth` | `{ name, login, refreshToken, getApiKey, modifyModels? }` | Optional | Plugs into `/login`. See OAuth subsection below. |
 
-`ProviderModelConfig` (`types.ts:1359-…`) carries `id`, `name`, optional `api` override, `reasoning`, `input` modalities, `cost`, `contextWindow`, `maxTokens`, etc. — same shape as built-in model definitions.
+`ProviderModelConfig` (`types.ts:1359-…`) carries `id`, `name`, optional `api` override, `baseUrl` (per-model override; **honored as of v0.72.0** — see `model-registry.ts:886`), `reasoning`, `thinkingLevelMap` (added v0.72.0; replaces removed `compat.reasoningEffortMap`), `input` modalities, `cost`, `contextWindow`, `maxTokens`, etc. — same shape as built-in model definitions. For the migration from `reasoningEffortMap`, see **pi-providers** `reference/custom-providers.md`.
 
 ## OAuth provider contract
 

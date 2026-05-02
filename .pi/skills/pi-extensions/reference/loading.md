@@ -27,7 +27,7 @@ addPaths(discoverExtensionsInDir(globalExtDir));
 for (const p of configuredPaths) { ... }
 ```
 
-`CONFIG_DIR_NAME` is `.pi` (from `config.ts:325`). `agentDir` defaults to `~/.pi/agent/` (`config.ts:351-358`); override with `PI_CODING_AGENT_DIR`.
+`CONFIG_DIR_NAME` is `.pi` (from `config.ts:376`). `agentDir` defaults to `~/.pi/agent/` (`config.ts:402-409`); override with `PI_CODING_AGENT_DIR`.
 
 **Project-first** is the opposite of skills (where user/global wins). Dedup is by absolute path via the `seen` set at `loader.ts:565-572` — first occurrence wins, so if the same extension is listed in both project and global, the project version is loaded and the global one is silently skipped.
 

@@ -58,7 +58,7 @@ The cross-project prompt (`main.ts:248-258`) is interactive (`promptConfirm`). H
 
 ## `--session-dir <dir>`
 
-Overrides the default `~/.pi/agent/sessions/--<encoded-cwd>--/` directory for both **storing new sessions** and **looking up** existing ones via `--continue` / `--resume`. Threaded as the `sessionDir` argument to every static factory (`main.ts:204-206, 222, 232, …`). Equivalent to setting `PI_CODING_AGENT_SESSION_DIR` in the env (`config.ts:330`).
+Overrides the default `~/.pi/agent/sessions/--<encoded-cwd>--/` directory for both **storing new sessions** and **looking up** existing ones via `--continue` / `--resume`. Threaded as the `sessionDir` argument to every static factory (`main.ts:204-206, 222, 232, …`). Equivalent to setting `PI_CODING_AGENT_SESSION_DIR` in the env (`config.ts:381`).
 
 When this flag is set, `--continue` looks for the most recent session **inside the override directory**, not the cwd-encoded default.
 

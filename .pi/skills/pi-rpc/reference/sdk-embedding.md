@@ -63,6 +63,20 @@ The subprocess flow can't do this — extensions must be `.ts` files pi loads fr
 
 `DefaultResourceLoader` does the full pi discovery dance (paths, packages, settings.json). For tightly-controlled hosts, supply a hand-rolled `ResourceLoader` (interface in `core/resource-loader.ts:29-…`) that exposes only the resources you want.
 
+### `shouldStopAfterTurn` (lower-level: `@mariozechner/pi-agent-core`)
+
+v0.72.0 added a post-turn stop callback on `AgentLoopConfig` in `packages/agent`. Signature at `packages/agent/src/types.ts:188`:
+
+```ts
+shouldStopAfterTurn?: (context: ShouldStopAfterTurnContext) => boolean | Promise<boolean>;
+```
+
+`ShouldStopAfterTurnContext` (`packages/agent/src/types.ts:103-114`) carries the just-completed `message`, `toolResults`, current `context`, and the `newMessages` array this loop run will return if it exits now. Returning `true` causes the agent loop to emit `agent_end` and exit **before polling the steering or follow-up queues**, **without starting another LLM call**. The current assistant response and tool executions finish normally first.
+
+Use case: graceful stop after a completed turn, e.g. before context gets too full or when a host has external reason to halt.
+
+**Currently this is a `packages/agent` (pi-agent-core) primitive only.** It is **not** surfaced through `createAgentSession` or `RpcClient` in coding-agent (no occurrences in `packages/coding-agent/src/`). If you need it, either drop down to the lower-level agent loop directly or wire it through your own embedding code. Cite call site: `packages/agent/src/agent-loop.ts:219`.
+
 ## Subprocess: `RpcClient`
 
 Class `RpcClient` at `packages/coding-agent/src/modes/rpc/rpc-client.ts:54-515`. Constructor takes `RpcClientOptions` (`:26-39`):

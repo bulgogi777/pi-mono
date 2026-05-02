@@ -4,9 +4,9 @@ Every auto-discovery path pi uses, in precedence order, grouped by resource type
 
 ## The two roots and the env override
 
-- **User / global root**: `~/.pi/agent/`. Computed by `getAgentDir()` at `packages/coding-agent/src/config.ts:351-358`. Overridable via the `PI_CODING_AGENT_DIR` environment variable (constant `ENV_AGENT_DIR` at `config.ts:329`).
-- **Project root**: `<cwd>/<CONFIG_DIR_NAME>/` — i.e. `<cwd>/.pi/`. `CONFIG_DIR_NAME` is defined at `config.ts:325`, default `".pi"`, overridable per-fork via `pkg.piConfig.configDir`.
-- **Sessions root**: `~/.pi/agent/sessions/` via `getSessionsDir()` (`config.ts:393-395`); overridable via `PI_CODING_AGENT_SESSION_DIR` (`ENV_SESSION_DIR` at `config.ts:330`).
+- **User / global root**: `~/.pi/agent/`. Computed by `getAgentDir()` at `packages/coding-agent/src/config.ts:402-409`. Overridable via the `PI_CODING_AGENT_DIR` environment variable (constant `ENV_AGENT_DIR` at `config.ts:380`).
+- **Project root**: `<cwd>/<CONFIG_DIR_NAME>/` — i.e. `<cwd>/.pi/`. `CONFIG_DIR_NAME` is defined at `config.ts:376`, default `".pi"`, overridable per-fork via `pkg.piConfig.configDir`.
+- **Sessions root**: `~/.pi/agent/sessions/` via `getSessionsDir()` (`config.ts:446-448`); overridable via `PI_CODING_AGENT_SESSION_DIR` (`ENV_SESSION_DIR` at `config.ts:381`).
 
 **Precedence is not uniform across resource types.** The table below makes that explicit; the "Order" column is the canonical one.
 
@@ -62,7 +62,7 @@ Every auto-discovery path pi uses, in precedence order, grouped by resource type
 
 | Resource | Path pattern | Order | Discovery code | Notes |
 |---|---|---|---|---|
-| Global themes | `~/.pi/agent/themes/` | — | `getCustomThemesDir()` at `config.ts:361-363` | Resource scan unifies via `settings-manager.ts` package contributions |
+| Global themes | `~/.pi/agent/themes/` | — | `getCustomThemesDir()` at `config.ts:411-413` | Resource scan unifies via `settings-manager.ts` package contributions |
 | `--no-themes` | Disables default theme discovery | — | `resource-loader.ts:443-445` | Same pattern as skills/prompts |
 
 ## Extensions
@@ -79,28 +79,28 @@ Every auto-discovery path pi uses, in precedence order, grouped by resource type
 
 | Resource | Path pattern | Order | Discovery code | Notes |
 |---|---|---|---|---|
-| Global settings | `~/.pi/agent/settings.json` | merged | `getSettingsPath()` at `config.ts:376-378`; loaded via `settings-manager.ts` | Source of `packages`, `defaultModel`, `defaultProvider`, `enabledModels`, `enabledSkills`, `theme`, `compaction`, etc. — see TODO `reference/settings-json-schema.md` |
+| Global settings | `~/.pi/agent/settings.json` | merged | `getSettingsPath()` at `config.ts:426-428`; loaded via `settings-manager.ts` | Source of `packages`, `defaultModel`, `defaultProvider`, `enabledModels`, `theme`, `compaction`, etc. — see `reference/settings-json-schema.md` |
 | Project settings | `<cwd>/.pi/settings.json` | merged on top of global | `settings-manager.ts` (look for `projectSettings`) | Merge semantics resource-type-specific; for `packages`, both arrays contribute (project first for collision resolution — `package-manager.ts:855-862`) |
 
 ## Sessions
 
 | Resource | Path pattern | Discovery code | Notes |
 |---|---|---|---|
-| Sessions dir | `~/.pi/agent/sessions/<encoded-cwd>/<session-id>.jsonl` | `getSessionsDir()` at `config.ts:393-395` | Override via `PI_CODING_AGENT_SESSION_DIR` (`config.ts:330`). Format / load semantics live in **pi-sessions** territory, not here |
+| Sessions dir | `~/.pi/agent/sessions/<encoded-cwd>/<session-id>.jsonl` | `getSessionsDir()` at `config.ts:446-448` | Override via `PI_CODING_AGENT_SESSION_DIR` (`config.ts:381`). Format / load semantics live in **pi-sessions** territory, not here |
 
 ## Other paths under `~/.pi/agent/`
 
-All defined as helpers in `config.ts:347-401`:
+All defined as helpers in `config.ts:398-453`:
 
 | Path | Helper | Source |
 |---|---|---|
-| `~/.pi/agent/auth.json` | `getAuthPath()` | `config.ts:371-373` |
-| `~/.pi/agent/models.json` | `getModelsPath()` | `config.ts:366-368` |
-| `~/.pi/agent/themes/` | `getCustomThemesDir()` | `config.ts:361-363` |
-| `~/.pi/agent/tools/` | `getToolsDir()` | `config.ts:381-383` |
-| `~/.pi/agent/bin/` (managed `fd`, `rg`) | `getBinDir()` | `config.ts:386-388` |
-| `~/.pi/agent/prompts/` | `getPromptsDir()` | `config.ts:391` |
-| `~/.pi/agent/<app>-debug.log` | `getDebugLogPath()` | `config.ts:399-401` |
+| `~/.pi/agent/auth.json` | `getAuthPath()` | `config.ts:421-423` |
+| `~/.pi/agent/models.json` | `getModelsPath()` | `config.ts:416-418` |
+| `~/.pi/agent/themes/` | `getCustomThemesDir()` | `config.ts:411-413` |
+| `~/.pi/agent/tools/` | `getToolsDir()` | `config.ts:431-433` |
+| `~/.pi/agent/bin/` (managed `fd`, `rg`) | `getBinDir()` | `config.ts:436-438` |
+| `~/.pi/agent/prompts/` | `getPromptsDir()` | `config.ts:441` |
+| `~/.pi/agent/<app>-debug.log` | `getDebugLogPath()` | `config.ts:451-453` |
 
 ## Cross-references
 

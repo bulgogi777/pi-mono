@@ -77,7 +77,7 @@ The tree is in-place: a single `.jsonl` file holds all branches. Switching betwe
 ~/.pi/agent/sessions/--Users-bogie-code-pi-mono--/2024-12-03T14-00-00-000Z_8a3c5f1e.jsonl
 ```
 
-The session-file basename is `<iso-timestamp-with-: and . replaced by ->_<sessionId>.jsonl` (constructed at `session-manager.ts:1331-1333` for forks; same scheme used by `create`). Override the sessions root via `PI_CODING_AGENT_SESSION_DIR` (`config.ts:330`); override per-call via the `sessionDir` parameter on every static factory.
+The session-file basename is `<iso-timestamp-with-: and . replaced by ->_<sessionId>.jsonl` (constructed at `session-manager.ts:1331-1333` for forks; same scheme used by `create`). Override the sessions root via `PI_CODING_AGENT_SESSION_DIR` (`config.ts:381`); override per-call via the `sessionDir` parameter on every static factory.
 
 ## Cross-references
 

@@ -136,10 +136,10 @@ Path resolution: paths in project arrays are resolved relative to `<cwd>`; paths
 
 ## Settings file locations
 
-- **Global**: `~/.pi/agent/settings.json` — `getSettingsPath()` at `packages/coding-agent/src/config.ts:376-378`.
+- **Global**: `~/.pi/agent/settings.json` — `getSettingsPath()` at `packages/coding-agent/src/config.ts:426-428`.
 - **Project**: `<cwd>/.pi/settings.json` — joined from `CONFIG_DIR_NAME` (`.pi`).
 - **File mode**: written `0600` for parity with `auth.json`.
-- **Override env**: `PI_CODING_AGENT_DIR` redirects the global path entirely (`config.ts:329`).
+- **Override env**: `PI_CODING_AGENT_DIR` redirects the global path entirely (`config.ts:380`).
 
 ## Cross-references
 

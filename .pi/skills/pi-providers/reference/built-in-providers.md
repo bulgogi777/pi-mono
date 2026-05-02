@@ -2,17 +2,20 @@
 
 Full table of providers pi knows about at HEAD, plus model-selection mechanics. All cites against pi-mono `HEAD` on the date this file was written.
 
-## The `KnownProvider` union (27 providers)
+## The `KnownProvider` union (28 providers)
 
-Defined at `packages/ai/src/types.ts:18-44` as a string-literal union of provider IDs. The current set:
+Defined at `packages/ai/src/types.ts:18-46` as a string-literal union of provider IDs. The current set:
 
 ```
 amazon-bedrock, anthropic, google, google-vertex, openai, azure-openai-responses,
 openai-codex, deepseek, github-copilot, xai, groq, cerebras, openrouter,
 vercel-ai-gateway, zai, mistral, minimax, minimax-cn, moonshotai, moonshotai-cn,
 huggingface, fireworks, opencode, opencode-go, kimi-coding, cloudflare-workers-ai,
-cloudflare-ai-gateway
+cloudflare-ai-gateway, xiaomi
 ```
+
+`xiaomi` was added in **v0.72.0** (Xiaomi MiMo Token Plan, Anthropic-compatible).
+
 
 `Provider` itself (`types.ts:46`) widens this to `KnownProvider | string` so extensions can register custom IDs (see `pi.registerProvider`).
 
@@ -49,6 +52,7 @@ The single source of truth for env-var → provider mapping is `packages/ai/src/
 | `kimi-coding` | API key | `KIMI_API_KEY` | `kimi-for-coding` | |
 | `cloudflare-workers-ai` | API key + account | `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID` | `@cf/moonshotai/kimi-k2.6` | Auto-sets `x-session-affinity` for prefix-cache discounts. |
 | `cloudflare-ai-gateway` | API key + account + gateway | `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID` | `workers-ai/@cf/moonshotai/kimi-k2.6` | Routes to OpenAI / Anthropic / Workers AI through one gateway. Auth modes: Workers-AI native, unified billing, stored BYOK, inline BYOK (`docs/providers.md:152-178`). |
+| `xiaomi` | API key | `XIAOMI_API_KEY` | `mimo-v2.5-pro` | **Added v0.72.0.** Xiaomi MiMo Token Plan (Anthropic-compatible endpoint). `/login` display name `"Xiaomi MiMo Token Plan"` (`provider-display-names.ts:27`). User-facing doc: `docs/providers.md:72-91`. |
 
 Default-model map source: `packages/coding-agent/src/core/model-resolver.ts:14-42` (`defaultModelPerProvider`).
 

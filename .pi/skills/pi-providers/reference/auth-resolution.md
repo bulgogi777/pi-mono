@@ -18,7 +18,7 @@ The `packages/coding-agent/docs/providers.md:226-232` doc summarizes this as a f
 
 ## auth.json shape
 
-Stored at `~/.pi/agent/auth.json`. File mode `0600`, parent dir mode `0700` (`auth-storage.ts:53-67`). Path resolved by `getAuthPath()` at `packages/coding-agent/src/config.ts:371-373`.
+Stored at `~/.pi/agent/auth.json`. File mode `0600`, parent dir mode `0700` (`auth-storage.ts:53-67`). Path resolved by `getAuthPath()` at `packages/coding-agent/src/config.ts:421-423`.
 
 Top-level shape: `Record<providerId, AuthCredential>` — see `auth-storage.ts:34` (`AuthStorageData`).
 

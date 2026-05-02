@@ -33,11 +33,11 @@ Repo structure and resource-discovery reference for pi-mono. Each `reference/*.m
 
 - "Where does pi look for AGENTS.md / CLAUDE.md / SYSTEM.md / APPEND_SYSTEM.md / skills / prompts / extensions?" → `reference/discovery-paths.md`.
 - "Which wins, project or global, for X?" → `reference/discovery-paths.md` (precedence column). Heads-up: it's **not uniform** — skills load user-first, extensions load project-first, SYSTEM.md is project-first, prompt templates are global-first.
-- "Where is settings.json / how do I read it?" → `getSettingsPath()` at `packages/coding-agent/src/config.ts:376-378`; loader is `packages/coding-agent/src/core/settings-manager.ts`.
+- "Where is settings.json / how do I read it?" → `getSettingsPath()` at `packages/coding-agent/src/config.ts:426-428`; loader is `packages/coding-agent/src/core/settings-manager.ts`.
 - "How does `pi install` / the packages array work?" → grep `packages/coding-agent/src/core/package-manager.ts` (look for `installPackage`, `packages`, `RESOURCE_TYPES`).
 - "What does `--no-skills` actually disable?" → `packages/coding-agent/src/core/resource-loader.ts:419-421`. Disables auto-discovered defaults but still honours CLI-supplied `--skill <path>` entries. Same pattern for `--no-prompts` and `--no-context-files`.
-- "What is `CONFIG_DIR_NAME`?" → `packages/coding-agent/src/config.ts:325` — defaults to `.pi`, overridable via `pkg.piConfig.configDir` for forks.
-- "Where is `~/.pi/agent/`? Can I move it?" → `getAgentDir()` at `config.ts:351-358`. Override with the `PI_CODING_AGENT_DIR` env var (`ENV_AGENT_DIR`, `config.ts:329`).
+- "What is `CONFIG_DIR_NAME`?" → `packages/coding-agent/src/config.ts:376` — defaults to `.pi`, overridable via `pkg.piConfig.configDir` for forks.
+- "Where is `~/.pi/agent/`? Can I move it?" → `getAgentDir()` at `config.ts:402-409`. Override with the `PI_CODING_AGENT_DIR` env var (`ENV_AGENT_DIR`, `config.ts:380`).
 
 ## Citation discipline
 

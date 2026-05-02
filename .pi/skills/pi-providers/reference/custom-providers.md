@@ -11,7 +11,7 @@ For built-in provider env vars and the auth resolution order, see `reference/aut
 
 ## models.json (declarative)
 
-User-facing doc: `packages/coding-agent/docs/models.md`. File path: `~/.pi/agent/models.json` (`getModelsPath()` at `config.ts:366-368`).
+User-facing doc: `packages/coding-agent/docs/models.md`. File path: `~/.pi/agent/models.json` (`getModelsPath()` at `config.ts:416-418`).
 
 ### Minimal example
 
@@ -53,8 +53,9 @@ For Ollama, only the model `id` is required:
     id: string;
     name?: string;
     api?: Api;                        // per-model API override
-    baseUrl?: string;                 // per-model URL override
+    baseUrl?: string;                 // per-model URL override (honored as of v0.72.0)
     reasoning?: boolean;
+    thinkingLevelMap?: ThinkingLevelMap;  // per-model thinking-level support (added v0.72.0; replaces compat.reasoningEffortMap)
     input?: ("text" | "image")[];
     cost?: { input, output, cacheRead, cacheWrite };
     contextWindow?: number;
@@ -66,6 +67,46 @@ For Ollama, only the model `id` is required:
 ```
 
 Fields are optional in `models.json` because pi falls back to sensible defaults for local models. For commercial endpoints (cost tracking, accurate context windows), supply explicit values.
+
+### Per-model `baseUrl` (fixed in v0.72.0)
+
+Before v0.72.0, `pi.registerProvider()` and `models.json` ignored per-model `baseUrl` fields, always falling back to the provider-level `baseUrl`. Fixed at `packages/coding-agent/src/core/model-registry.ts:886` — `modelDef.baseUrl ?? config.baseUrl!` ([#4063](https://github.com/badlogic/pi-mono/issues/4063)). After upgrade, models with their own `baseUrl` route there as expected.
+
+### thinking levels: `thinkingLevelMap` (added v0.72.0, replaces `reasoningEffortMap`)
+
+v0.72.0 introduced model-level thinking-level metadata. Type at `packages/ai/src/types.ts:51`:
+
+```ts
+type ThinkingLevelMap = Partial<Record<ModelThinkingLevel, string | null>>;
+```
+
+Keys are pi thinking levels (`off | minimal | low | medium | high | xhigh`). Values are provider-specific strings (e.g. `"high"`, `"max"`) or `null` to mark the level as **unsupported** (hidden from cycling, skipped during selection). Missing keys fall back to provider defaults.
+
+Migration from `compat.reasoningEffortMap` (removed):
+
+```jsonc
+// BEFORE (v0.71.x and earlier)
+{
+  "models": [{
+    "id": "my-model",
+    "reasoning": true,
+    "compat": { "reasoningEffortMap": { "high": "high", "xhigh": "max" } }
+  }]
+}
+
+// AFTER (v0.72.0+)
+{
+  "models": [{
+    "id": "my-model",
+    "reasoning": true,
+    "thinkingLevelMap": { "minimal": null, "low": null, "medium": null, "high": "high", "xhigh": "max" }
+  }]
+}
+```
+
+The field moves from `model.compat.reasoningEffortMap` to **top-level** `model.thinkingLevelMap`. Map values keep the same provider-specific string semantics; `null` is the new way to mark a level unsupported. See `packages/ai/CHANGELOG.md` v0.72.0 for the canonical migration note and `packages/ai/src/models.ts:50-79` for the `getSupportedThinkingLevels()` and `clampThinkingLevel()` helpers that now consume this metadata.
+
+`supportsXhigh()` was also removed in the same release. Use `getSupportedThinkingLevels(model).includes("xhigh")` or `clampThinkingLevel(model, requested)` instead.
 
 ### Compat overrides (Ollama / vLLM / SGLang)
 
