@@ -14,7 +14,20 @@ Rules:
 
 Direction:
 - **Stdin** carries `RpcCommand` and `RpcExtensionUIResponse` JSON lines from the host into pi.
-- **Stdout** carries `RpcResponse`, the `AgentSessionEvent` stream, and `RpcExtensionUIRequest` JSON lines from pi back to the host. Pi's stdout is "taken over" by `takeOverStdout()` at `rpc-mode.ts:49` so accidental `console.log` from extensions is captured and re-routed (otherwise it would corrupt the JSONL stream).
+- **Stdout** carries `RpcResponse`, the `AgentSessionEvent` stream, and `RpcExtensionUIRequest` JSON lines from pi back to the host. Pi's stdout is "taken over" by `takeOverStdout()` at `rpc-mode.ts:49` so accidental `console.log` from extensions is captured and re-routed (otherwise it would corrupt the JSONL stream). See **Stdout-as-capability** below for the mechanism.
+
+## Stdout-as-capability (the output-guard discipline)
+
+The RPC framer doesn't *ask* code to behave on stdout — it makes ambient stdout writes physically incapable of reaching fd1. `packages/coding-agent/src/core/output-guard.ts:9-34` is the mechanism (confidence: high — pinned at sha `e4163fe9`, verified via panel transcript `00MPIOUQZCD4A4733BB50FD03D`):
+
+1. `takeOverStdout()` (`output-guard.ts:9-34`) captures the real `process.stdout.write` into a held reference (`rawStdoutWrite`, line 14).
+2. It then **replaces `process.stdout.write` itself** with a shim (lines 18-27) that routes every byte to `rawStderrWrite` instead. After this call, `process.stdout.write(...)` from anywhere — `console.log`, ink, transitive deps, Node runtime warnings — physically lands on stderr.
+3. The captured reference is held inside the module's `stdoutTakeoverState`. The only public path back to the true fd1 is `writeRawStdout(text)` (`output-guard.ts:49-55`), which `rpc-mode.ts` wraps in `output(obj) -> writeRawStdout(serializeJsonLine(obj))` at `rpc-mode.ts:53-55`. That `output` is the sole legitimate producer of framed records on the wire.
+4. `takeOverStdout()` is engaged at `rpc-mode.ts:49`, the first line of `runRpcMode`, before any extension or session code runs.
+
+Why it's built this way: "route diagnostics to stderr" as a convention is unenforceable across transitive deps, ink redraws, and runtime warnings. The output-guard makes the protocol channel a **single-owner capability** rather than an ambient resource — prevention-by-construction. Framing (LF-only JSONL above) protects a clean channel; it does not rescue a contaminated one.
+
+This pattern generalises to any framed-protocol-over-stdio subprocess (panel-member transcripts have the same shape and have adopted it; see panel `00MPIOUQZCD4A4733BB50FD03D`).
 
 ## Request/response correlation
 
