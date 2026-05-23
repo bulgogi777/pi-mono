@@ -4,7 +4,7 @@ description: >-
   Pi-mono system prompt assembly and Anthropic cache breakpoints. USE WHEN
   asked how pi builds the system prompt (buildSystemPrompt in
   system-prompt.ts), customPrompt vs default branch, assembly order
-  (SYSTEM.md → APPEND_SYSTEM → AGENTS.md / "# Project Context" → skills via
+  (SYSTEM.md → APPEND_SYSTEM → AGENTS.md / <project_context>/<project_instructions> XML block (since 0.75.0; was "# Project Context" Markdown heading pre-0.75.0) → skills via
   formatSkillsForPrompt → date → cwd), the read-tool gate on skills, prompt
   templates, resolvePromptInput, the OAuth Claude Code identity preamble,
   Anthropic cache_control / cacheRead / cacheWrite / ephemeral cache,
@@ -33,8 +33,8 @@ How pi assembles the system prompt and how Anthropic prompt caching layers on to
 ## Quick start when asked
 
 - "What goes into the system prompt and in what order?" → `reference/assembly-order.md`.
-- "Why doesn't my AGENTS.md show up?" → `reference/assembly-order.md` (the `# Project Context` block at `system-prompt.ts:60-66` and `:154-160` only fires when `contextFiles` is non-empty; path discovery itself is **pi-architecture**'s territory).
-- "Why aren't my skills in the system prompt?" → read-tool gate at `system-prompt.ts:71` (customPrompt branch) and `:163` (default branch). No `read` tool selected → no `<available_skills>` block. Skill **bodies** are never in the system prompt — only name/description/location via `formatSkillsForPrompt` (`skills.ts:340-366`).
+- "Why doesn't my AGENTS.md show up?" → `reference/assembly-order.md` (the `<project_context>` block at `system-prompt.ts:61-68` and `:156-163` only fires when `contextFiles` is non-empty; path discovery itself is **pi-architecture**'s territory). Pre-0.75.0 this block used a `# Project Context` Markdown heading; PR #4541 / #4709 (`7577d3b8`, `aad8cf66`) switched it to XML tags so models stop ingesting prompt content past the boundary.
+- "Why aren't my skills in the system prompt?" → read-tool gate at `system-prompt.ts:71` (customPrompt branch) and `:166` (default branch). No `read` tool selected → no `<available_skills>` block. Skill **bodies** are never in the system prompt — only name/description/location via `formatSkillsForPrompt` (`skills.ts:340-366`).
 - "Where are the Anthropic cache breakpoints?" / "What does `cache_control` cache?" → `reference/cache-breakpoints.md`.
 - "What invalidates the cache when I edit APPEND_SYSTEM.md / a skill / AGENTS.md?" → `reference/cache-breakpoints.md` "Practical implications" section.
 - "Why am I getting empty turns through RpcClient?" → `reference/known-issues.md` (TBW); for now, try `--system-prompt` to force the customPrompt branch.
