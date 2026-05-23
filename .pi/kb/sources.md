@@ -1,6 +1,6 @@
 # sources.md — pi-mono-expert
 
-## Substrate type
+## substrate type
 
 `repo` — truth is the pinned upstream SHA; cite `file:line` against this pin.
 
