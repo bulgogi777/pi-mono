@@ -14,7 +14,7 @@
 - **Fork:** `origin` → `git@github.com:bulgogi777/pi-mono.git`
 - **Branch tracked:** `main`
 - **Working branch:** `expert/main` (all `.pi/` changes land here)
-- **Current pin:** `e4163fe9` (2026-05-23, main HEAD at expert scaffold time)
+- **Current pin:** `fc51a40d` (2026-05-23, main HEAD after self-update; covers releases 0.73.0 → 0.75.5)
 
 ### Update procedure
 
@@ -38,7 +38,7 @@ No deployment target for this expert. Pi is used locally as a CLI tool (`/home/d
 
 ### Confidence rules (repo)
 
-- Claims about behavior cite `file:line` in the pinned tree (`e4163fe9`)
+- Claims about behavior cite `file:line` in the pinned tree (`fc51a40d`)
 - Claims about deployment cite a successful probe against the local binary
 - Claims about "best practice" cite the upstream docs or ≥2 independent usages in the codebase
 
