@@ -6,6 +6,75 @@ Citations: `<sha>` for commit; `<file>:<line>` against the **new pin** (unless o
 
 ---
 
+## 2026-06-07 — pulled to `592c34c0` (v0.78.1)
+
+> Pinned 2026-06-07: `origin/main` fast-forwarded to `v0.78.1`, `expert/main` rebased onto it (`.pi/`-only, clean), `Current pin:` bumped in `sources.md`. The runtime npm global `@earendil-works/pi-coding-agent` was independently upgraded to `0.78.1` the same day. Citations below are `file:line` against the `v0.78.1` tree (`592c34c0`), which now equals the pin.
+
+**Previous pin:** `fc51a40d` (2026-05-23; covers releases 0.73.0 → 0.75.5)
+**Proposed target:** tag `v0.78.1` = `592c34c05643d115d6eed08a6f615999651cfaa3` (2026-06-04). New releases in range: `0.76.0`, `0.77.0`, `0.78.0`, `0.78.1`.
+**Diff scope:** `fc51a40d..v0.78.1` = 146 commits (verified `git rev-list --count`; high). `upstream/main` (`130ae577`) is 20 commits past the tag (166 total since pin; high) — the extra 20 are post-0.78.1 and out of scope for this evaluation.
+**Runtime framing (high):** The RUNTIME pi is the npm global `@earendil-works/pi-coding-agent` (installed `0.75.5`, npm `latest`=`0.78.1`; confirmed via `npm view ... dist-tags` and installed `package.json`), NOT built from this monorepo. Upgrading the runtime is `npm i -g @earendil-works/pi-coding-agent@0.78.1`, not a monorepo rebuild. The nested `@earendil-works/pi-ai` (where stealth-billing `isOAuthToken` lives) is shrinkwrapped to the coding-agent release (installed pi-ai `0.75.5` ships inside coding-agent `0.75.5`), so the npm upgrade pulls the matching pi-ai automatically (high).
+
+### Behavior changes that matter (territory)
+
+**RPC layer — additive only; client API surface preserved (high)**
+- `RpcClientOptions` unchanged: `cliPath`/`cwd`/`env`/`provider`/`model`/`args` all present (`rpc-client.ts:26-39`). `start()`/`prompt(message,images?)`/`onEvent(listener)` intact (`rpc-client.ts:72,196,170`).
+- New defensive process-exit handling: `RpcClient` now rejects pending requests and tracks `exitError` on child `exit`/`error`/stdin-`error` (`rpc-client.ts:503-510,524-545`; PR `#4764`). Net effect: previously-hung promises now reject cleanly. No protocol shape change.
+- `bash` RPC command gained optional `excludeFromContext?: boolean` (`rpc-types.ts:52`; `0.76.0`, `#5039`). Backward compatible — existing `bash` calls unaffected.
+
+**CLI spawn args — all additive; nothing removed or renamed (high)**
+- `--mode`, `--provider`, `--model`, `--system-prompt`/`--append-system-prompt`, `--extension`/`-e`, `--session`, `--thinking` all still parsed unchanged (`args.ts:84-130`).
+- New flags: `--name`/`-n` (`args.ts:97-103`, `0.78.0`), `--session-id` (`args.ts:107-108`, `0.76.0`), `--exclude-tools`/`-xt` (`args.ts:124-129`, `0.77.0`).
+
+**Subscription / stealth-billing path — mechanism intact (high), key resolution relocated (medium)**
+- OAuth-token detection unchanged: `isOAuthToken(apiKey) => apiKey.includes("sk-ant-oat")` (`anthropic.ts:779-780`); interactive check `startsWith("sk-ant-oat")` (`interactive-mode.ts:191`).
+- Extra-usage warning is an interactive-mode-only constant (`ANTHROPIC_SUBSCRIPTION_AUTH_WARNING`, `interactive-mode.ts:187-188`), shown via `maybeWarnAboutAnthropicSubscriptionAuth` (`:4105`). Not emitted in RPC/print mode — does not touch apex-app or synapse RPC consumers (high).
+- `system-prompt.ts` only removed one file-exploration guideline line (`#5132`); customPrompt-vs-default branches and XML `<project_context>` wrapping (since 0.75.0) unchanged. The custom-`--system-prompt` trap-avoidance mechanism is intact (medium — verified no structural change to assembly branches).
+- **Refactor:** `streamAnthropic`/`streamSimpleAnthropic` no longer call `getEnvApiKey` internally; they now require `options.apiKey` and throw `No API key for provider` if absent (`anthropic.ts:482-485,741`). Key resolution moved up to the coding-agent layer (auth-storage/sdk), which still resolves `--api-key`/`auth.json`/env. Net behavior for our consumers unchanged (medium — relocation, not removal).
+- New compat flags `supportsTemperature` (default `true`) and `allowEmptySignature` (default `false`) (`anthropic.ts:179-180`); temperature now suppressed when `supportsTemperature===false` (`anthropic.ts:935`). opus-4-8 ships `supportsTemperature:false` (high; `0.78.1` `#5251`).
+- Credential config values now parse `$ENV_VAR` / `${ENV_VAR}` interpolation, `$!`/`$$` escaping, and treat plain strings as literals (`resolve-config-value.ts:11-90`; `0.77.0` `#5095`). Plain API-key literals are safe **unless** they contain an unescaped `$` (high).
+
+**Model registry — opus-4-8 first-class; default model bumped (high)**
+- `claude-opus-4-8` is a first-class `anthropic`-provider entry (`models.generated.ts:1923-1941`): `provider:"anthropic"`, `baseUrl:https://api.anthropic.com`, `contextWindow:1000000`, `maxTokens:128000`, `cost {input:5,output:25,cacheRead:0.5,cacheWrite:6.25}`, `compat{forceAdaptiveThinking:true,supportsTemperature:false}`, `reasoning:true`, `thinkingLevelMap{xhigh:xhigh}`, `input:[text,image]`.
+- **Default anthropic model changed `claude-opus-4-7` → `claude-opus-4-8`** in `defaultModelPerProvider` (`model-resolver.ts:16`; `0.77.0`). Invocations that omit `--model` on the anthropic provider now resolve to opus-4-8 automatically (high).
+
+**Resource loader / prompt assembly / sessions / extensions (high)**
+- Resource loader, skills loader, project-context discovery: **unchanged** (empty diff `fc51a40d..v0.78.1` for `resource-loader.ts`/`skills.ts`/`project-context.ts`). `.pi/` scaffold loading, cwd ancestor-walk, `SYSTEM.md`/`APPEND_SYSTEM.md` discovery unaffected.
+- Sessions: JSONL entry types and on-disk format unchanged; `loadEntriesFromFile` refactored to line-by-line read for large files (`session-manager.ts`, `0.78.1` `#5231`). `getDefaultSessionDir` still exported and location-stable (`session-manager.ts`). Added `--session-id`/`assertValidSessionId` (`0.76.0`) and startup `--name` (`0.78.0`). Existing sessions remain readable (high).
+- Extensions: `ExtensionContext` gained a **required** `mode: "tui"|"rpc"|"json"|"print"` field, and `hasUI` semantics changed — now `true` in TUI **and RPC** modes (previously false in RPC) (`extensions/types.ts:298,303-305`). New `ctx.getSystemPromptOptions()` for command contexts (`:338`) and `InputEvent.streamingBehavior` (`:766`). `getAllTools()` now exposes `promptGuidelines` (`:1223`).
+
+### Breaking changes checklist
+
+- [x] **Node minimum `>=22.19.0`** (`packages/coding-agent/package.json` engines at `v0.78.1`). Local node is `v22.22.0` — satisfied (high). `legacy-node20` dist-tag pinned at `0.74.2` is irrelevant on node 22 (high).
+- [x] **`ExtensionContext.mode` now required + `hasUI` true in RPC** (`extensions/types.ts:303-305`). Affects extension authors who construct contexts manually or gate UI on `hasUI`. Extensions that only *receive* `ctx` get the new field additively; ones that branch on `hasUI` to suppress dialogs in RPC will now attempt dialogs (high).
+- [x] **anthropic provider throws if `options.apiKey` absent** (`anthropic.ts:482-485,741`). Internal to the pi-ai SDK; the coding-agent resolves keys upstream, so CLI/RPC consumers unaffected (medium).
+- [x] **Default anthropic model is now `claude-opus-4-8`** (was `claude-opus-4-7`) (`model-resolver.ts:16`). Unspecified-model anthropic invocations change model (and per-token cost) (high).
+- [ ] No RPC command removed/renamed; no CLI flag removed/renamed; no session-format break; no resource-loader change (high).
+
+### New features (territory-relevant)
+
+- `--session-id <id>` exact project-local session create/resume (`0.76.0`, `args.ts:107`).
+- `--name`/`-n` startup session display name (`0.78.0`, `args.ts:97`).
+- `--exclude-tools`/`-xt` tool denylist (`0.77.0`, `args.ts:124`).
+- `bash` RPC `excludeFromContext` (`0.76.0`, `rpc-types.ts:52`).
+- `retry.provider.maxRetries` setting; SDK retries default to 0 (`0.76.0`, `anthropic.ts:519`).
+- `ctx.mode` + `ctx.getSystemPromptOptions()` extension context (`0.78.1`, `extensions/types.ts:303,338`).
+- New built-in providers: Ant Ling, NVIDIA NIM, ZAI Coding CN; MiniMax-M3 (`env-api-keys.ts:102,104,115`; `model-resolver.ts:17,21,32`).
+
+### Fork-patch / rebase risk (high)
+
+- `expert/main` carries **only `.pi/` additions** beyond `upstream/main` (3892 insertions, 0 deletions; `git diff --stat upstream/main...expert/main` shows exclusively `.pi/SYSTEM.md`, `.pi/kb/*`, `.pi/skills/pi-*`). It edits **zero** upstream source files. The shared upstream `.pi/` files (`.pi/extensions/*`, `.pi/prompts/*`, `.pi/skills/add-llm-provider.md`) are present in both trees but untouched by expert commits → no overlap. A rebase of `expert/main` onto `v0.78.1` will be **clean** (high).
+- `origin/main` is **not ahead** of `upstream/main` (`git log upstream/main..origin/main` empty) — the fork is a pristine mirror + the expert scaffold. A runtime npm upgrade bypasses nothing on `origin/main` (high).
+- The runtime `[pai-context]` / `[pi-delivery]` log lines are **not present in pi-mono source** (`git grep` at `v0.78.1` empty). They originate from apex infra (the global `~/.pi/agent/extensions/pai-context.ts` extension) — unaffected by a pi-mono runtime upgrade, except that any global extension using `ExtensionAPI` inherits the `ctx.mode`/`hasUI` change above (high).
+
+### Files modified in this run
+
+- `.pi/kb/version-log.md` — this entry, finalized on pin to `592c34c0`.
+- `.pi/kb/sources.md` — `Current pin:` bumped `fc51a40d` → `592c34c0`; Update procedure rewritten to the two-halves (runtime + fork) form; added a runtime/fork-relationship note.
+- `/home/debian/apex/efforts/pi-code/kb/pi-upgrade-0.75-to-0.78-assessment.md` — standalone upgrade-evaluation report (new).
+
+---
+
 ## 2026-05-23 — pulled to `fc51a40d`
 
 **Previous pin:** `e4163fe9` (2026-05-23, main HEAD at expert scaffold time)
