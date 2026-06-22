@@ -6,6 +6,43 @@ Citations: `<sha>` for commit; `<file>:<line>` against the **new pin** (unless o
 
 ---
 
+## 2026-06-22 — pulled to `8e190066` (v0.79.10)
+
+> Pinned 2026-06-22: `origin/main` fast-forwarded to `v0.79.10`, `expert/main` rebased onto it (`.pi/`-only, 6 commits, clean), `Current pin:` bumped in `sources.md`. Runtime npm global independently upgraded `0.78.1 → 0.79.10` the same day and verified live (floor + pi-task + consult-pi-mono all first-party on 0.79.10). Citations below are `file:line` against the `v0.79.10` tree (`8e190066`). Targeted gap-scan (areas 1-5 only); see `efforts/pi-code/kb/pi-0.79.10-gap-scan.md` for the full report.
+
+**Previous pin:** `592c34c0` (2026-06-07; covers releases 0.76.0 → 0.78.1)
+**Target:** tag `v0.79.10` = `8e1900666f3cb83c281297d8f787fae6ee2bd0e6`. New releases in range: `0.79.0` → `0.79.10`.
+**Diff scope:** `592c34c0..v0.79.10` = 292 files, ~13.5k insertions / ~3.7k deletions (`git diff --stat -- packages/`). Dominant theme: AI-package refactor (`packages/ai/src/anthropic.ts` → `packages/ai/src/providers/anthropic.ts`) + new project-trust gating.
+
+### Behavior changes that matter (territory)
+
+**Project-trust gating — NEW in 0.79.x, load-bearing for APEX (high)**
+- `discoverSystemPromptFile()`: project `<cwd>/.pi/SYSTEM.md` is now trust-gated (`resource-loader.ts:964-967`, `if (isProjectTrusted() && existsSync(projectPath))`); global `~/.pi/agent/SYSTEM.md` stays UNGATED bare `existsSync` (`:969-971`). Same split for `APPEND_SYSTEM.md` (`:978-981` gated / `:983-985` ungated).
+- Headless (RPC/print) has no UI → `resolveProjectTrusted` returns `false` at `project-trust.ts:86-87` (`if (!options.projectTrustContext.hasUI) return false`) → project file dropped → would fall to pi's flagged default block-2.
+- `--approve`/`-a` → `projectTrustOverride=true` (`args.ts:180-181`), honored first in `resolveProjectTrusted` (`project-trust.ts:47-49`). Resolution order: override → resource-presence short-circuit (`hasTrustRequiringProjectResources`, `trust-manager.ts:28-36`) → `project_trust` extension handler → persisted → `defaultProjectTrust` → interactive prompt.
+- **Surprise:** a cwd with NO trust-requiring resources under `.pi/` short-circuits to trusted (`project-trust.ts:50-52`); only `settings.json`/`extensions`/`skills`/`prompts`/`themes`/`SYSTEM.md`/`APPEND_SYSTEM.md` trigger the prompt.
+- Downstream handling: global `~/.pi/agent/SYSTEM.md` billing floor (universal) + version-aware `--approve` in `consult-pi-mono` (expert identity). See `efforts/pi-code/kb/pi-anthropic-subscription-billing.md`.
+
+**Providers / OAuth stealth — mechanism intact, file relocated + lines moved (high)**
+- `packages/ai/src/anthropic.ts` → **`packages/ai/src/providers/anthropic.ts`**. All prior `anthropic.ts:NNN` cites need path + line update.
+- `isOAuthToken` → `providers/anthropic.ts:798-800`; Claude-Code identity headers → `:867-889`; OAuth two-block system construction → `:928-944` (block1 identity `:930-935` + `cache_control`; block2 custom `:937-943` + `cache_control`).
+- Cache breakpoints shifted ~+43-52 lines: system `:950`, OAuth caches `:934/:941`, last-tool `:1220`, last-user `:1170-1186`.
+- `git log v0.78.1..v0.79.10 -- packages/ai/` confirms **no billing-affecting OAuth/routing change** beyond the refactor.
+
+**Per-turn system-prompt rebuild — intact, line drift (medium)**
+- `before_agent_start` emit + reset-to-base now at `agent-session.ts:1110-1135` (reset at `:1135`; old note `:1099`, +36). Per-turn re-injection still required and cache-safe (stable prefix). Reload path (`resource-loader.ts:340-489`) semantics unchanged; no new caching layer.
+
+**Model registry — unchanged from v0.78.1 (high)**
+- `defaultModelPerProvider.anthropic = "claude-opus-4-8"` (`model-resolver.ts:17`); first-class entry in `models.generated.ts`. No consumer default flip needed.
+
+### kb files updated / flagged
+
+- `.pi/kb/sources.md` — pin bumped `592c34c0 → 8e190066`; added 0.79.x trust-gating note.
+- **Downstream:** `efforts/pi-code/kb/pi-anthropic-subscription-billing.md` — corrected `project-trust.ts:130-132` → `:86-87`; Area-1 trust cites (`resource-loader.ts:965/969`, `args.ts:181`) verified still accurate.
+- **FLAGGED for a dedicated skill-edit pass** (not done this run; see gap-scan report §"Prioritized skill-edit list"): `pi-prompt-assembly` (HIGH — `anthropic.ts`→`providers/anthropic.ts` path break + 5 stale cache cites + add trust-gating note), `pi-providers` (HIGH — `interactive-mode.ts` warning `:166→:190`, emission `→:4165`, `auth-storage.ts:466→:473`, path-break note), `pi-architecture` (MED — `config.ts` ~+115 pre-existing rot → `:491/:495/:515-521`; `trust-manager` note), `pi-sessions` (MED — `session-manager.ts:438-462` re-anchor), `pi-rpc`/`pi-extensions` (LOW — `willRetry` event, jiti loader cites).
+
+---
+
 ## 2026-06-07 — pulled to `592c34c0` (v0.78.1)
 
 > Pinned 2026-06-07: `origin/main` fast-forwarded to `v0.78.1`, `expert/main` rebased onto it (`.pi/`-only, clean), `Current pin:` bumped in `sources.md`. The runtime npm global `@earendil-works/pi-coding-agent` was independently upgraded to `0.78.1` the same day. Citations below are `file:line` against the `v0.78.1` tree (`592c34c0`), which now equals the pin.
