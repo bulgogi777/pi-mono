@@ -14,7 +14,7 @@
 - **Fork:** `origin` → `git@github.com:bulgogi777/pi-mono.git`
 - **Branch tracked:** `main`
 - **Working branch:** `expert/main` (all `.pi/` changes land here)
-- **Current pin:** `592c34c0` (2026-06-07, tag `v0.78.1`; covers releases 0.76.0 → 0.78.1). Matches the installed npm runtime `@earendil-works/pi-coding-agent@0.78.1`.
+- **Current pin:** `8e190066` (2026-06-22, tag `v0.79.10`; covers releases 0.79.0 → 0.79.10). Matches the installed npm runtime `@earendil-works/pi-coding-agent@0.79.10`. **0.79.x added project-trust gating** (headless RPC resolves untrusted → project `.pi/SYSTEM.md` dropped); the global `~/.pi/agent/SYSTEM.md` floor + version-aware `--approve` in consumers handle it. See `efforts/pi-code/kb/pi-anthropic-subscription-billing.md`.
 
 ### Update procedure
 
@@ -48,7 +48,7 @@ No deployment target for this expert. Pi is used locally as a CLI tool (`/home/d
 
 ### Confidence rules (repo)
 
-- Claims about behavior cite `file:line` in the pinned tree (`592c34c0`)
+- Claims about behavior cite `file:line` in the pinned tree (`8e190066`)
 - Claims about deployment cite a successful probe against the local binary
 - Claims about "best practice" cite the upstream docs or ≥2 independent usages in the codebase
 
