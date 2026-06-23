@@ -37,6 +37,8 @@ Pi RPC mode reference: protocol shape, command catalog, event stream, and the ex
 - "Why does my extension hang in RPC mode?" → `reference/extension-ui-bridge.md`. Awaited `ctx.ui` methods (select / confirm / input / editor) emit `extension_ui_request` and **wait** for an `extension_ui_response` with matching `id`. If the host doesn't reply, only `signal` or `timeout` (resolves to default) unblocks them.
 - "Subprocess or in-process?" → If the host is Node/TS, prefer in-process `AgentSession` (`packages/coding-agent/docs/sdk.md`). Use `RpcClient` (`rpc-client.ts`) when you need process isolation or you're shelling out from a non-Node host.
 - "What's the difference between `--mode rpc` and `--mode json`?" → `--mode json` is one-shot (a single prompt argument, no stdin command channel) but emits the same event stream. `--mode rpc` is bidirectional (commands on stdin, responses + events on stdout).
+- "How big will the context be after compaction?" → since 0.79.8, `compact` response and `compaction_end` event carry `estimatedTokensAfter` alongside the existing `tokensBefore`. It's a heuristic estimate over the rebuilt message context immediately after compaction, **not a provider-exact token count**. Source: `CompactionResult.estimatedTokensAfter` at `core/compaction/compaction.ts:107`; documented at `docs/rpc.md` (`compact` response and `compaction_end` event sections).
+- "How do I know whether the host needs to handle project trust?" → you don't, if you set `defaultProjectTrust: "always"` in `~/.pi/agent/settings.json` or install a global `project_trust` extension. Otherwise, headless RPC in untrusted cwds drops project-local `.pi/` resources silently. See **pi-architecture** “Project trust gating (0.79.x)”.
 
 ## Citation discipline
 

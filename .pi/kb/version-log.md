@@ -39,7 +39,7 @@ Citations: `<sha>` for commit; `<file>:<line>` against the **new pin** (unless o
 
 - `.pi/kb/sources.md` — pin bumped `592c34c0 → 8e190066`; added 0.79.x trust-gating note.
 - **Downstream:** `efforts/pi-code/kb/pi-anthropic-subscription-billing.md` — corrected `project-trust.ts:130-132` → `:86-87`; Area-1 trust cites (`resource-loader.ts:965/969`, `args.ts:181`) verified still accurate.
-- **FLAGGED for a dedicated skill-edit pass** (not done this run; see gap-scan report §"Prioritized skill-edit list"): `pi-prompt-assembly` (HIGH — `anthropic.ts`→`providers/anthropic.ts` path break + 5 stale cache cites + add trust-gating note), `pi-providers` (HIGH — `interactive-mode.ts` warning `:166→:190`, emission `→:4165`, `auth-storage.ts:466→:473`, path-break note), `pi-architecture` (MED — `config.ts` ~+115 pre-existing rot → `:491/:495/:515-521`; `trust-manager` note), `pi-sessions` (MED — `session-manager.ts:438-462` re-anchor), `pi-rpc`/`pi-extensions` (LOW — `willRetry` event, jiti loader cites).
+- **Skill-edit pass APPLIED 2026-06-22** (same-day follow-up consult; all new/changed cites re-verified against the pinned source; host independently spot-checked ~10 cites — all exact). Sections refreshed/added across: `pi-prompt-assembly` (HIGH — `anthropic.ts`→`providers/anthropic.ts` path break + 5 stale cache cites + add trust-gating note), `pi-providers` (HIGH — `interactive-mode.ts` warning `:166→:190`, emission `→:4165`, `auth-storage.ts:466→:473`, path-break note), `pi-architecture` (MED — `config.ts` ~+115 pre-existing rot → `:491/:495/:515-521`; `trust-manager` note), `pi-sessions` (MED — `session-manager.ts:438-462` re-anchor), `pi-rpc`/`pi-extensions` (LOW — `willRetry` event, jiti loader cites).
 
 ---
 
