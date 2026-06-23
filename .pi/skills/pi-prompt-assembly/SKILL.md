@@ -8,9 +8,12 @@ description: >-
   formatSkillsForPrompt → date → cwd), the read-tool gate on skills, prompt
   templates, resolvePromptInput, the OAuth Claude Code identity preamble,
   Anthropic cache_control / cacheRead / cacheWrite / ephemeral cache,
-  getCacheControl, the up-to-4 breakpoint sites in anthropic.ts (system
-  :907, OAuth :891 / :898, last tool :1169, last user :1118-1135), what
+  getCacheControl, the up-to-4 breakpoint sites in providers/anthropic.ts (system
+  :950, OAuth :934 / :941, last tool :1220, last user :1170-1186), what
   invalidates each, or empty turns from default-prompt through RpcClient.
+  Also covers trust-gated discovery of project SYSTEM.md / APPEND_SYSTEM.md
+  vs the ungated global floor (see pi-architecture for the trust resolution
+  chain itself).
   Also USE WHEN debugging why AGENTS.md / skill / APPEND_SYSTEM isn't in
   prompt, or why cache_write spiked. Do NOT use
   for path discovery (pi-architecture), hook events / ExtensionAPI
@@ -33,8 +36,9 @@ How pi assembles the system prompt and how Anthropic prompt caching layers on to
 ## Quick start when asked
 
 - "What goes into the system prompt and in what order?" → `reference/assembly-order.md`.
-- "Why doesn't my AGENTS.md show up?" → `reference/assembly-order.md` (the `<project_context>` block at `system-prompt.ts:61-68` and `:156-163` only fires when `contextFiles` is non-empty; path discovery itself is **pi-architecture**'s territory). Pre-0.75.0 this block used a `# Project Context` Markdown heading; PR #4541 / #4709 (`7577d3b8`, `aad8cf66`) switched it to XML tags so models stop ingesting prompt content past the boundary.
-- "Why aren't my skills in the system prompt?" → read-tool gate at `system-prompt.ts:71` (customPrompt branch) and `:166` (default branch). No `read` tool selected → no `<available_skills>` block. Skill **bodies** are never in the system prompt — only name/description/location via `formatSkillsForPrompt` (`skills.ts:340-366`).
+- "Why doesn't my AGENTS.md show up?" → `reference/assembly-order.md` (the `<project_context>` block at `system-prompt.ts:60-65` (customPrompt branch) and `:154-161` (default branch) only fires when `contextFiles` is non-empty; path discovery itself is **pi-architecture**'s territory). Pre-0.75.0 this block used a `# Project Context` Markdown heading; PR #4541 / #4709 (`7577d3b8`, `aad8cf66`) switched it to XML tags so models stop ingesting prompt content past the boundary.
+- "Why aren't my skills in the system prompt?" → read-tool gate at `system-prompt.ts:71` (customPrompt branch, `customPromptHasRead`) and `:164` (default branch, `hasRead` set at `:110`). No `read` tool selected → no `<available_skills>` block. Skill **bodies** are never in the system prompt — only name/description/location via `formatSkillsForPrompt` (`skills.ts:335-361`).
+- "Is `.pi/SYSTEM.md` getting loaded in headless RPC?" → no, unless trust is granted. Project `SYSTEM.md` / `APPEND_SYSTEM.md` discovery is **trust-gated** (`resource-loader.ts:964-967, :978-981`); the global `~/.pi/agent/SYSTEM.md` / `APPEND_SYSTEM.md` floor is ungated (`:969-971, :983-985`). Headless RPC with no `--approve` and no saved trust returns `false` (`project-trust.ts:88-90`), so only the global floor loads. For the full resolution chain (extension handler, `defaultProjectTrust`, persisted decisions), read **pi-architecture**'s trust-gating section.
 - "Where are the Anthropic cache breakpoints?" / "What does `cache_control` cache?" → `reference/cache-breakpoints.md`.
 - "What invalidates the cache when I edit APPEND_SYSTEM.md / a skill / AGENTS.md?" → `reference/cache-breakpoints.md` "Practical implications" section.
 - "Why am I getting empty turns through RpcClient?" → `reference/known-issues.md` (TBW); for now, try `--system-prompt` to force the customPrompt branch.
