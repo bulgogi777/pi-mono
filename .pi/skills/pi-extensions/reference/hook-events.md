@@ -1,10 +1,16 @@
 # Hook Events
 
-Complete catalog of pi extension hook events. Subscribe via `pi.on(eventName, handler)` from inside an extension factory; see `packages/coding-agent/src/core/extensions/types.ts:1086-1126` for the full overload list.
+Complete catalog of pi extension hook events. Subscribe via `pi.on(eventName, handler)` from inside an extension factory; see `packages/coding-agent/src/core/extensions/types.ts:1133-1170` for the full overload list.
 
 Payload **types** (the `*Event` interfaces and their `*Result` companions) are defined in `packages/coding-agent/src/core/extensions/types.ts`. Events are **emitted** from `packages/coding-agent/src/core/agent-session.ts`, `packages/coding-agent/src/core/agent-session-runtime.ts`, `packages/coding-agent/src/core/sdk.ts`, `packages/coding-agent/src/core/extensions/runner.ts`, and `packages/coding-agent/src/modes/interactive/interactive-mode.ts`. Specialized emitters (`emitContext`, `emitToolCall`, `emitToolResult`, `emitUserBash`, `emitInput`, `emitBeforeProviderRequest`, `emitBeforeAgentStart`, `emitMessageEnd`, `emitResourcesDiscover`) live in `runner.ts:~700-1060` — they wrap result merging across multiple handlers. The generic `emit()` is for fire-and-forget events; `emitGeneric` covers the cancellable `session_before_*` family.
 
-Cites verified against pi-mono `HEAD` on the date this file was written. If a line drifts, grep for the event-type string literal — it is unique enough to relocate quickly.
+Cites verified against pi-mono at the current pin (`v0.79.10`, `8e190066`). The internal `types.ts:NNN` ranges for individual events drift between releases; if a line drifts, grep for the event-type string literal (e.g. `'project_trust'`, `'session_before_compact'`) — it is unique enough to relocate quickly.
+
+## Startup (pre-resource)
+
+| Event | Purpose | Payload type | Result type | Emit site |
+|---|---|---|---|---|
+| `project_trust` | Lets user/global and CLI `-e` extensions decide whether pi loads project-local `.pi/` resources for the current cwd. Fires before project-local extensions are loaded — project-local extensions cannot subscribe. Used to skip the built-in trust prompt or persist a yes/no decision. See `SKILL.md` “New in 0.79.x — project_trust event”. | `ProjectTrustEvent` (`types.ts:503-505`) | `ProjectTrustEventResult` (`types.ts:510-513`) — `{ trusted: "yes" \| "no" \| "undecided", remember?: boolean }` | `resource-loader.ts:346-350` (via `resolveProjectTrust` callback) → `project-trust.ts:54-70`; handler signature `ProjectTrustHandler` at `types.ts:522-525`; overload at `types.ts:1133` |
 
 ## Resources
 
@@ -19,8 +25,8 @@ Cites verified against pi-mono `HEAD` on the date this file was written. If a li
 | `session_start` | Session has been started, loaded, or reloaded (carries `reason: "startup" \| "reload" \| "new" \| "resume" \| "fork"`). | `SessionStartEvent` (`types.ts:513-520`) | — | `agent-session.ts:2066` (initial), `agent-session.ts:2417` (reload); seed value at `agent-session.ts:322` |
 | `session_before_switch` | About to switch to another session; handler may cancel. | `SessionBeforeSwitchEvent` (`types.ts:522-526`) | `SessionBeforeSwitchResult` (`types.ts:1018-1020`) | `agent-session-runtime.ts:120-130` |
 | `session_before_fork` | About to fork from an entry; handler may cancel or skip conversation restore. | `SessionBeforeForkEvent` (`types.ts:529-533`) | `SessionBeforeForkResult` (`types.ts:1022-1025`) | `agent-session-runtime.ts:137-147` |
-| `session_before_compact` | About to compact; handler may cancel or supply a custom `CompactionResult`. | `SessionBeforeCompactEvent` (`types.ts:536-543`) | `SessionBeforeCompactResult` (`types.ts:1027-1030`) | `agent-session.ts:1655-1670` and `agent-session.ts:1913-1925` |
-| `session_compact` | Compaction completed. | `SessionCompactEvent` (`types.ts:545-550`) | — | `agent-session.ts:1717` and `agent-session.ts:1989` |
+| `session_before_compact` | About to compact; handler may cancel or supply a custom `CompactionResult`. Since 0.79.10 the payload carries `reason: "manual" \| "threshold" \| "overflow"` and `willRetry: boolean` so handlers can distinguish manual `/compact` vs threshold vs overflow-recovery flows. | `SessionBeforeCompactEvent` (`types.ts:569-579`) | `SessionBeforeCompactResult` (`types.ts:1068-1071`) | `agent-session.ts:1655-1670` and `agent-session.ts:1913-1925` (grep `emit.*session_before_compact` if drifted) |
+| `session_compact` | Compaction completed. Since 0.79.10 carries `reason` and `willRetry` matching the `session_before_compact` event so a single handler can correlate begin/end. | `SessionCompactEvent` (`types.ts:582-590`) | — | `agent-session.ts:1717` and `agent-session.ts:1989` (grep `emit.*session_compact` if drifted) |
 | `session_before_tree` | About to navigate the session tree (re-parent / branch summary); handler may cancel or override summary. | `SessionBeforeTreeEvent` (`types.ts:575-580`) | `SessionBeforeTreeResult` (`types.ts:1032-1043`) | `agent-session.ts:2749-2755` |
 | `session_tree` | Session tree navigation completed. | `SessionTreeEvent` (`types.ts:582-588`) | — | `agent-session.ts:2867-2870` |
 | `session_shutdown` | Extension runtime is being torn down (quit / reload / replacement). Last chance to flush. | `SessionShutdownEvent` (`types.ts:552-558`) | — | `agent-session-runtime.ts:150-156`, `agent-session-runtime.ts:367-373`, and `agent-session.ts:2401` (all via `emitSessionShutdownEvent`); helper at `runner.ts:180-190` |
