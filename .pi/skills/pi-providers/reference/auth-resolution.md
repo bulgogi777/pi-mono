@@ -1,6 +1,6 @@
 # Auth Resolution
 
-How pi resolves credentials for a given provider, what `~/.pi/agent/auth.json` contains, and the OAuth-vs-API-key billing distinction (especially for Anthropic). All cites against the current pin (`v0.79.10`, `8e190066`).
+How pi resolves credentials for a given provider, what `~/.pi/agent/auth.json` contains, and the OAuth-vs-API-key billing distinction (especially for Anthropic). All cites against the current pin (`v0.80.9`, `2d16f929`).
 
 ## The five-step resolution order
 
@@ -126,8 +126,8 @@ Use the shell-command form: `{ "type": "api_key", "key": "!op read 'op://vault/i
 
 ## Cross-references
 
-- The actual Anthropic OAuth flow (PKCE, `claude.ai`-hosted authorization) lives in `packages/ai/src/utils/oauth/anthropic.ts` — outside this skill's primary territory but cited here for completeness.
-- The `anthropic-beta` headers `claude-code-20250219,oauth-2025-04-20` set on OAuth requests (`providers/anthropic.ts:878`) interact with prompt caching — see **pi-prompt-assembly** `reference/cache-breakpoints.md` (the OAuth identity preamble is breakpoint #1a there). Note: this file relocated from `packages/ai/src/anthropic.ts` in the 0.79.x AI-package refactor.
+- The actual Anthropic OAuth flow (PKCE, `claude.ai`-hosted authorization) lives in `packages/ai/src/auth/oauth/anthropic.ts` (relocated from `packages/ai/src/utils/oauth/anthropic.ts` in the 0.80.x re-architecture) — outside this skill's primary territory but cited here for completeness.
+- The `anthropic-beta` headers `claude-code-20250219,oauth-2025-04-20` set on OAuth requests (`api/anthropic-messages.ts:884`) interact with prompt caching — see **pi-prompt-assembly** `reference/cache-breakpoints.md` (the OAuth identity preamble is breakpoint #1a there). Note: in the 0.80.x AI-package re-architecture the streaming/OAuth logic moved from `packages/ai/src/providers/anthropic.ts` (now an 18-line provider shell) to `packages/ai/src/api/anthropic-messages.ts`.
 - Per-provider env vars and `auth.json` keys: see `reference/built-in-providers.md`.
 - Custom-provider auth (extensions registering their own OAuth flows): `pi.registerProvider` documented in `packages/coding-agent/docs/custom-provider.md`.
 - The global `httpProxy` setting in `~/.pi/agent/settings.json` (0.79.5) and per-credential `env: {}` overrides both compose with the auth-resolution path — see `settings-manager.ts:120` for the setting and `http-dispatcher.ts:42-45` for `applyHttpProxySettings` (sets `process.env.HTTP_PROXY` and `HTTPS_PROXY` via `??=`, so pre-existing process-env values still win).
