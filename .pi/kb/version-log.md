@@ -6,6 +6,46 @@ Citations: `<sha>` for commit; `<file>:<line>` against the **new pin** (unless o
 
 ---
 
+## 2026-07-16 — pulled to `2d16f929` (v0.80.9)
+
+> Pinned 2026-07-16: runtime npm global upgraded `0.79.10 → 0.80.9` and **verified live** (consult RPC smoke 5.77s clean exit, agent_end terminal, OAuth subscription call + cache_control active). `origin/main` fast-forwarded `8e190066 → v0.80.9` and pushed; `expert/main` rebased onto `v0.80.9` (`.pi/`-only, 9 commits, clean → `c2f14f58`). Citations below are `file:line` against the `v0.80.9` tree (`2d16f929`). Full audit: `x/memory/outputs/2026-07/16/1417 - pi 0.79.10 to 0.80.9 upgrade verdict.md`. Executed under workitem `314abbf8`.
+
+**Previous pin:** `8e190066` (2026-06-22; covers releases 0.79.0 → 0.79.10)
+**Target:** tag `v0.80.9` = `2d16f92973230a7e095aa984f150ba8702784f50`. New releases in range: `0.80.1` → `0.80.9` (0.80.0/0.80.4 unpublished on npm).
+**Diff scope:** `v0.79.10..v0.80.9` = 537 files, ~53.6k insertions / ~29.5k deletions. Dominant theme: **AI-package provider re-architecture** (one-file-per-provider split under `packages/ai/src/providers/*` + streaming/API logic moved to `packages/ai/src/api/*`).
+
+### Behavior changes that matter (territory) — audit verdict: SAFE
+
+**Anthropic OAuth/billing stealth — mechanism byte-identical, FILE MOVED (high)**
+- `packages/ai/src/providers/anthropic.ts` is now an 18-line provider shell; all streaming/OAuth logic → **`packages/ai/src/api/anthropic-messages.ts`**. **All prior `providers/anthropic.ts:NNN` cites are dead.**
+- OAuth detect `apiKey.includes("sk-ant-oat")` (`anthropic-messages.ts:828-829`). Two-block system: identity `"You are Claude Code, Anthropic's official CLI for Claude."` (`:961`) + custom systemPrompt (`:968`), both `cache_control`'d (`:962`/`:969`); non-OAuth single-block (`:975`); construction `:957-981`. Headers `anthropic-beta: claude-code-20250219,oauth-2025-04-20` + `user-agent: claude-cli/${ver}` (`:884-885`). interactive warning `startsWith("sk-ant-oat")` (`interactive-mode.ts:210`), interactive-only. **No billing-affecting change.**
+
+**Project-trust gating — UNCHANGED (high)**
+- `project-trust.ts` empty diff; `resource-loader.ts` diff cosmetic (dirname refactor, InlineExtension typing, resetTimings). Gate stands (+2 line drift): project `.pi/SYSTEM.md` gated `isProjectTrusted() && existsSync` (`resource-loader.ts:966-967`), global ungated (`:971-972`); `APPEND_SYSTEM.md` `:980-981` gated / `:985-986` ungated. Headless untrusted `if (!hasUI) return false` (`project-trust.ts:86-87`); no-trust short-circuit `:50`.
+
+**Model registry — UNCHANGED (high)**
+- `defaultModelPerProvider.anthropic = "claude-opus-4-8"` (`model-resolver.ts:17`; confirmed in compiled installed `model-resolver.js`). Only internal `modelRegistry.find` → `modelRuntime.getModel` (0.80.x downloadable model catalogs).
+
+**RPC / CLI — additive only, one event-surface change (high)**
+- All harness flags present (`args.ts`): `--mode/provider/model/api-key/system-prompt/append-system-prompt/name(-n)/session/session-id/extension(-e)/approve(-a)`. Additive: `--thinking` gained `max`; new `--session-dir`/`--models`. Unknown `--flags` absorbed into `unknownFlags` map (`args.ts:188-199`), NOT hard-rejected (only unknown single-dash `-x` errors `:203`).
+- RPC protocol additive: new `get_entries`/`get_tree` (`rpc-types.ts:63-64,187-199`).
+- **NEW `agent_settled` event** (`agent-session.ts:143`), emitted after `agent_end` once loop drains (`:560-564`, `:1059`); **`waitForIdle()` repointed** `agent_end`→`agent_settled` (`rpc-client.ts:445`/`:456`). `agent_end`+`willRetry` contract intact (`:601`/`:647`/`:1966`) — our consult/pi-task resolve-on-`agent_end`-before-`start()` fix UNAFFECTED (verified live). Flagged by peer `pi-code-slate-a9d0`.
+
+### kb files to refresh (gap-scan follow-up — NOT yet done)
+
+- **HIGH:** `pi-prompt-assembly`, `pi-providers` — re-anchor all `providers/anthropic.ts` cites → `api/anthropic-messages.ts` (path break + line moves). The OAuth two-block / cache-breakpoint / identity-header cites all shifted.
+- **MED:** `pi-rpc` — add `agent_settled` event + `waitForIdle()` repoint; note `promptAndWait` return type widened `AgentEvent[]`→`AgentSessionEvent[]`.
+- **LOW:** `pi-architecture`/`pi-sessions` — verify `resource-loader.ts` line drift (+2) on trust-gate cites.
+- Downstream: `efforts/pi-code/kb/pi-anthropic-subscription-billing.md` — Area-1 cites now point at the old `providers/anthropic.ts` path.
+- Non-territory finding: `consult-pi-mono.ts:81` hardcodes `?? "claude-opus-4-7"` fallback (stale vs opus-4-8 standard) — owned by consult session.
+
+### Files modified in this run
+
+- `.pi/kb/sources.md` — pin bumped `8e190066 → 2d16f929`; added 0.80.x AI-restructure + agent_settled note.
+- `.pi/kb/version-log.md` — this entry.
+
+---
+
 ## 2026-06-22 — pulled to `8e190066` (v0.79.10)
 
 > Pinned 2026-06-22: `origin/main` fast-forwarded to `v0.79.10`, `expert/main` rebased onto it (`.pi/`-only, 6 commits, clean), `Current pin:` bumped in `sources.md`. Runtime npm global independently upgraded `0.78.1 → 0.79.10` the same day and verified live (floor + pi-task + consult-pi-mono all first-party on 0.79.10). Citations below are `file:line` against the `v0.79.10` tree (`8e190066`). Targeted gap-scan (areas 1-5 only); see `efforts/pi-code/kb/pi-0.79.10-gap-scan.md` for the full report.
