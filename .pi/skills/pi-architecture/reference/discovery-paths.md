@@ -1,6 +1,6 @@
 # Discovery Paths
 
-Every auto-discovery path pi uses, in precedence order, grouped by resource type. Cites verified against the current pin (`v0.79.10`, `8e190066`). If a line drifts, grep for the function name (`loadProjectContextFiles`, `discoverSystemPromptFile`, `discoverAndLoadExtensions`, `loadSkills`, `loadPromptTemplates`) — they are unique enough to relocate quickly.
+Every auto-discovery path pi uses, in precedence order, grouped by resource type. Trust-gate and `discoverSystemPromptFile` / `discoverAppendSystemPromptFile` cites verified against the current pin (`v0.80.9`, `2d16f929`); some general discovery cites (`loadProjectContextFiles`, `args.ts`, `config.ts`) may carry small drift from earlier pins. If a line drifts, grep for the function name (`loadProjectContextFiles`, `discoverSystemPromptFile`, `discoverAndLoadExtensions`, `loadSkills`, `loadPromptTemplates`) — they are unique enough to relocate quickly.
 
 ## The two roots and the env override
 
@@ -27,9 +27,9 @@ If none of these exist under `<cwd>/.pi/`, `hasTrustRequiringProjectResources(cw
 - `AGENTS.md` / `CLAUDE.md` context files (loaded by `loadProjectContextFiles`).
 - User/global extensions (`~/.pi/agent/extensions/`).
 - CLI `-e` / `--extension` extensions.
-- Global `~/.pi/agent/SYSTEM.md` and `~/.pi/agent/APPEND_SYSTEM.md` — the **ungated floor** (verified at `resource-loader.ts:969-971, :983-985`).
+- Global `~/.pi/agent/SYSTEM.md` and `~/.pi/agent/APPEND_SYSTEM.md` — the **ungated floor** (verified at `resource-loader.ts:971-972, :985-986`).
 
-**Resolution order** (`packages/coding-agent/src/core/project-trust.ts:46-99`):
+**Resolution order** (`packages/coding-agent/src/core/project-trust.ts:46-96`):
 
 1. `trustOverride` — set by `--approve` / `-a` or `--no-approve` / `-na` (`args.ts:180-183`). Wins everything.
 2. `hasTrustRequiringProjectResources(cwd)` — no gated resource exists → auto-trust.
@@ -63,9 +63,9 @@ If none of these exist under `<cwd>/.pi/`, `hasTrustRequiringProjectResources(cw
 
 | Resource | Path pattern | Order | Discovery code | Notes |
 |---|---|---|---|---|
-| Project | `<cwd>/.pi/SYSTEM.md` | 1st (wins when trusted) | `discoverSystemPromptFile` at `resource-loader.ts:963-974`; project gate at `:964-967` | **Trust-gated** — `this.settingsManager.isProjectTrusted() && existsSync(projectPath)` |
-| Global | `~/.pi/agent/SYSTEM.md` | 2nd (fallback / always available) | `resource-loader.ts:969-971` | Bare `existsSync` — **ungated**. The headless-RPC / untrusted-cwd floor |
-| CLI override | `--system-prompt <text-or-file>` | overrides both | `resource-loader.ts:475` (`this.systemPromptSource ?? this.discoverSystemPromptFile()`) | If the arg names an existing file it is read; otherwise treated as literal text (`resolvePromptInput` at `:49-64`) |
+| Project | `<cwd>/.pi/SYSTEM.md` | 1st (wins when trusted) | `discoverSystemPromptFile` at `resource-loader.ts:965-977`; project gate at `:966-967` | **Trust-gated** — `this.settingsManager.isProjectTrusted() && existsSync(projectPath)` |
+| Global | `~/.pi/agent/SYSTEM.md` | 2nd (fallback / always available) | `resource-loader.ts:971-972` | Bare `existsSync` — **ungated**. The headless-RPC / untrusted-cwd floor |
+| CLI override | `--system-prompt <text-or-file>` | overrides both | `resource-loader.ts:475` (`this.systemPromptSource ?? this.discoverSystemPromptFile()`) | If the arg names an existing file it is read; otherwise treated as literal text (`resolvePromptInput` at `:50-65`) |
 
 **Project-wins when trusted.** Opposite of skills/prompts.
 
@@ -75,8 +75,8 @@ Same trust pattern as SYSTEM.md.
 
 | Resource | Path pattern | Order | Discovery code | Notes |
 |---|---|---|---|---|
-| Project | `<cwd>/.pi/APPEND_SYSTEM.md` | 1st (wins when trusted) | `discoverAppendSystemPromptFile` at `resource-loader.ts:977-988`; project gate at `:978-981` | **Trust-gated** |
-| Global | `~/.pi/agent/APPEND_SYSTEM.md` | 2nd (fallback / always available) | `resource-loader.ts:983-985` | **Ungated** |
+| Project | `<cwd>/.pi/APPEND_SYSTEM.md` | 1st (wins when trusted) | `discoverAppendSystemPromptFile` at `resource-loader.ts:979-991`; project gate at `:980-981` | **Trust-gated** |
+| Global | `~/.pi/agent/APPEND_SYSTEM.md` | 2nd (fallback / always available) | `resource-loader.ts:985-986` | **Ungated** |
 | CLI override | `--append-system-prompt` (repeatable) | replaces auto-discovered | `resource-loader.ts:481-483` (`this.appendSystemPromptSource ?? ...`) | When set, **only** CLI sources are used; auto-discovered file is dropped |
 
 ## Skills

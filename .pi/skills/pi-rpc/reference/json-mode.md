@@ -52,13 +52,14 @@ So the output stream is:
 ...
 {"type":"message_end","message":{...}}
 {"type":"turn_end","message":{...},"toolResults":[...]}
-{"type":"agent_end","messages":[...]}
+{"type":"agent_end","messages":[...],"willRetry":false}
+{"type":"agent_settled"}
 ```
 
-The events are exactly the `AgentSessionEvent` union (`packages/coding-agent/src/core/agent-session.ts:114-133`):
+The events are exactly the `AgentSessionEvent` union (`packages/coding-agent/src/core/agent-session.ts:136-162`):
 
-- `AgentEvent` base: `agent_start`, `agent_end`, `turn_start`, `turn_end`, `message_start`, `message_update`, `message_end`, `tool_execution_start`, `tool_execution_update`, `tool_execution_end`.
-- pi-coding-agent additions: `queue_update`, `compaction_start`, `compaction_end`, `auto_retry_start`, `auto_retry_end`, `session_info_changed`, `thinking_level_changed`.
+- `AgentEvent` base: `agent_start`, `agent_end`, `turn_start`, `turn_end`, `message_start`, `message_update`, `message_end`, `tool_execution_start`, `tool_execution_update`, `tool_execution_end`. Note the pi override of `agent_end` adds `willRetry: boolean` (`agent-session.ts:139-142`).
+- pi-coding-agent additions: `agent_settled` (**new in 0.80.x** — the true end-of-run signal, emitted after the final `agent_end`), `queue_update`, `compaction_start`, `compaction_end`, `auto_retry_start`, `auto_retry_end`, `entry_appended`, `session_info_changed`, `thinking_level_changed`.
 
 Same set as RPC mode. The wire format per event is identical to RPC's events (which is documented in `reference/protocol.md`).
 
@@ -112,7 +113,7 @@ Hosts consuming `--mode json` should be ready for these auxiliary events and not
 ## Cross-references
 
 - Full event-stream catalog (the same events `--mode json` and `--mode rpc` emit): `reference/protocol.md` "Event stream" section.
-- The `AgentSessionEvent` union definition: `packages/coding-agent/src/core/agent-session.ts:114-133`.
+- The `AgentSessionEvent` union definition: `packages/coding-agent/src/core/agent-session.ts:136-162`.
 - The `print-mode.ts` `text` vs `json` split: `packages/coding-agent/src/modes/print-mode.ts:18-19`.
 - For the RPC command channel and full bidirectional protocol: `reference/protocol.md`.
 - For embedding strategy comparison (in-process vs subprocess): `reference/sdk-embedding.md`.
