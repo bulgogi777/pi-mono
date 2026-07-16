@@ -36,6 +36,34 @@ git diff <old-pin>.."v$RUNTIME" -- packages/                  # territory review
 # bump Current pin: above to the v$RUNTIME sha, then: git push origin expert/main --force-with-lease
 ```
 
+> **Gap-scan is MANDATORY, not optional, after any large-diff or AI-package upgrade.** Big refactors relocate files and shift every line (e.g. 0.80.x moved the whole anthropic OAuth/billing path `providers/anthropic.ts` → `api/anthropic-messages.ts`, breaking every cite). Cites also rot *between* upgrades (0.80.9 revealed the provider catalog had already drifted 27→36 unnoticed) — run a periodic drift scan independent of version bumps. Track cite-drift found-but-out-of-scope as its own workitem rather than expanding the upgrade.
+
+### Post-upgrade verification (run BEFORE bumping the pin — any failure ⇒ rollback, do not pin)
+
+Proven 2026-07-16 on the 0.79.10 → 0.80.9 jump. Four gates tied to the territory concerns:
+
+1. **RPC timing** — `PI_MONO_VERBOSE=1 bun /home/debian/apex/efforts/pi-code/scripts/consult-pi-mono.ts 'ping'` must return in ~5s **and EXIT** (not hang to timeout). Guards the `agent_end`/`willRetry` terminal-event contract that consult/pi-task resolve on. Wrap in `timeout 90` so a hang is caught, not waited out.
+2. **Billing floor** — the smoke call above is an OAuth-subscription call; confirm it completes with `cache_control` active (`cacheWrite>0` in the `[consult] done` line) — proves the two-block cached-system OAuth path (`api/anthropic-messages.ts`) still bills against the Max subscription.
+3. **Model resolve** — confirm unspecified-model anthropic resolves to `claude-opus-4-8`: `grep -n 'anthropic:' <installed>/dist/**/model-resolver.js` (authoritative — the *installed* compiled JS, not the git tree).
+4. **Trust gating** — confirm the installed `resource-loader.js`/`project-trust.js` still carry the `isProjectTrusted()` + `hasUI` gates (headless RPC drops project `.pi/SYSTEM.md` → global floor).
+
+### Rollback procedure (both halves — a partial rollback leaves runtime and cites mismatched)
+
+Fully reversible; nothing in the upgrade is destructive. npm retains all published versions; git retains the prior tag + expert HEAD.
+
+```bash
+# (1) RUNTIME — npm keeps every version; downgrade pulls the matching shrinkwrapped pi-ai automatically
+npm i -g @earendil-works/pi-coding-agent@<prev-version>   # e.g. 0.79.10
+#     + revert any consumer model-default edits (apex-app, synapse, ~/.pi/agent/settings.json)
+
+# (2) FORK + PIN — reset expert/main to the prior tag/commit, restore Current pin:
+git checkout expert/main && git reset --hard v<prev-version>   # or the prior expert HEAD sha
+git push origin expert/main --force-with-lease
+git checkout main && git reset --hard v<prev-version> && git push origin main --force-with-lease
+```
+
+Pre-commit, reversibility is inherent: the audit is read-only and the pin bump is one discrete commit — nothing changes until you push.
+
 ### Secondary sources (for `survey-usage`)
 
 - Upstream GitHub Issues + Discussions: `https://github.com/earendil-works/pi/issues`
