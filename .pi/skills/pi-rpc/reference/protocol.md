@@ -115,12 +115,13 @@ Any command can fail with `{ id, type: "response", command, success: false, erro
 
 ## Event stream
 
-Pi emits the `AgentSessionEvent` union (`packages/coding-agent/src/core/agent-session.ts:~102`, also documented at `packages/coding-agent/docs/json.md:11-21`). It composes the base `AgentEvent` from `packages/agent/src/types.ts:~179` plus pi-coding-agent-specific events. Events have no `id` field.
+Pi emits the `AgentSessionEvent` union (`packages/coding-agent/src/core/agent-session.ts:136-162`, also documented at `packages/coding-agent/docs/json.md:11-21`). It composes the base `AgentEvent` from `packages/agent/src/types.ts:415` plus pi-coding-agent-specific events. Events have no `id` field.
 
 | Event `type` | Payload | Emitted when |
 |---|---|---|
 | `agent_start` | — | Agent begins processing a prompt. |
-| `agent_end` | `messages: AgentMessage[]` | Agent fully idle for this run. |
+| `agent_end` | `messages: AgentMessage[]`, `willRetry: boolean` | The agent loop finished a run. `willRetry: true` means an auto-compaction/retry will re-enter the loop, so this is **not** terminal. Payload gained `willRetry` in 0.80.x (`agent-session.ts:139-142`; predicate `_willRetryAfterAgentEnd` at `:647`, terminal `stopReason !== "stop"` at `:1966`). |
+| `agent_settled` | — | **New in 0.80.x** (`agent-session.ts:143`). Emitted once, *after* the final `agent_end`, when the loop has fully drained (steering + follow-up queues empty, no retry pending). Emitted at `agent-session.ts:563-564` via `_emitAgentSettled()` (`:1059`). This — not `agent_end` — is what `RpcClient.waitForIdle()` now resolves on. |
 | `turn_start` | — | Each turn begins (one assistant response + its tool results). |
 | `turn_end` | `message: AgentMessage`, `toolResults: ToolResultMessage[]` | Each turn completes. |
 | `message_start` | `message: AgentMessage` | Any message (user / assistant / toolResult) begins. |
@@ -134,7 +135,7 @@ Pi emits the `AgentSessionEvent` union (`packages/coding-agent/src/core/agent-se
 | `compaction_end` | `reason`, `result?: CompactionResult`, `aborted: boolean`, `willRetry: boolean`, `errorMessage?: string` | Compaction completes (or fails). |
 | `auto_retry_start` | `attempt`, `maxAttempts`, `delayMs`, `errorMessage` | After a transient provider error. |
 | `auto_retry_end` | `success: boolean`, `attempt: number`, `finalError?: string` | Retry resolved (success or final failure). |
-| `extension_error` | `extensionPath: string`, `event: string`, `error: string` | An extension threw inside a hook. Emitted from `rpc-mode.ts:343-345` via the `onError` callback. |
+| `extension_error` | `extensionPath: string`, `event: string`, `error: string` | An extension threw inside a hook. Emitted from `rpc-mode.ts:347-348` via the `onError` callback. |
 
 ### `assistantMessageEvent` delta types
 
