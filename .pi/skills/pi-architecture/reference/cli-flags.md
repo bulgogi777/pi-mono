@@ -8,7 +8,7 @@ This file covers **resource flags only** (context files, skills, prompts, system
 
 | Flag | Short | Args | Lines | Effect |
 |---|---|---|---|---|
-| `--system-prompt <text\|file>` | — | required | `args.ts:89-90` | Replaces the default system-prompt body. If the value names an existing file, pi reads it; otherwise treated as literal text (`resolvePromptInput`, `resource-loader.ts:15-27`). |
+| `--system-prompt <text\|file>` | — | required | `args.ts:89-90` | Replaces the default system-prompt body. If the value names an existing file, pi reads it; otherwise treated as literal text (`resolvePromptInput`, `resource-loader.ts:50-65`). |
 | `--append-system-prompt <text\|file>` | — | required, repeatable | `args.ts:91-93` | Appends to whatever system prompt was assembled. Repeat to append multiple chunks. When set, **CLI sources replace** any auto-discovered `APPEND_SYSTEM.md` (`resource-loader.ts:467-469`). |
 | `--no-context-files` | `-nc` | — | `args.ts:147-148` | Skips the AGENTS.md / CLAUDE.md ancestor walk. Gated at `resource-loader.ts:455-456`. |
 | `--skill <path>` | — | required, repeatable | `args.ts:132-134` | Adds a skill file or directory to the load list. Always honored even with `--no-skills`. |
@@ -38,7 +38,7 @@ const extensionPaths = this.noExtensions
 
 ## System prompt resolution
 
-`--system-prompt` and `--append-system-prompt` both flow through `resolvePromptInput` (`resource-loader.ts:15-27`):
+`--system-prompt` and `--append-system-prompt` both flow through `resolvePromptInput` (`resource-loader.ts:50-65`):
 
 1. If the value names an existing file path (relative or absolute), read the file and use its contents.
 2. Otherwise, treat the literal value as the prompt text.

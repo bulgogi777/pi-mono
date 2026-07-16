@@ -44,7 +44,7 @@ await session.prompt("Hello");
 await session.waitForIdle();
 ```
 
-`session` is an `AgentSession` instance (defined in `core/agent-session.ts`). The full method surface — `prompt`, `steer`, `followUp`, `abort`, `compact`, `setModel`, `subscribe`, `waitForIdle`, `bindExtensions`, etc. — is the same code that the RPC dispatcher calls on the receiving end.
+`session` is an `AgentSession` instance (defined in `core/agent-session.ts`). The full method surface — `prompt`, `steer`, `followUp`, `abort`, `compact`, `setModel`, `subscribe`, `waitForIdle`, `bindExtensions`, etc. — is the same code that the RPC dispatcher calls on the receiving end. (In-process `AgentSession.waitForIdle` at `agent-session.ts:1536` waits on the internal `isIdle` promise; the subprocess `RpcClient.waitForIdle` at `rpc-client.ts:447` instead resolves on the `agent_settled` event — **new in 0.80.x**, previously `agent_end`.)
 
 ### Custom tools and inline extensions
 
@@ -79,7 +79,7 @@ Use case: graceful stop after a completed turn, e.g. before context gets too ful
 
 ## Subprocess: `RpcClient`
 
-Class `RpcClient` at `packages/coding-agent/src/modes/rpc/rpc-client.ts:54-515`. Constructor takes `RpcClientOptions` (`:26-39`):
+Class `RpcClient` at `packages/coding-agent/src/modes/rpc/rpc-client.ts:55-592`. Constructor takes `RpcClientOptions` (`:27-40`):
 
 ```ts
 {
@@ -163,7 +163,7 @@ const unsubscribe = client.onEvent((event) => {
 
 - **`cliPath` defaults to `"dist/cli.js"`** — relative to the caller's cwd. If you're embedding from outside the pi-mono dev tree, supply an absolute path.
 - **`stdio: ["pipe", "pipe", "pipe"]`** means pi's stderr never reaches the user's terminal directly — it's collected by the client. Surface it on errors.
-- **The 30s timeout is hard-coded** (`rpc-client.ts:486`). Long compactions or slow LLMs can exceed it. No exposed override yet.
+- **The 30s RPC command-response timeout is hard-coded** (`rpc-client.ts:558`). Long compactions or slow LLMs can exceed it. No exposed override yet. (Distinct from `waitForIdle` / `promptAndWait`, which default to a 60s `timeout` **parameter** — `rpc-client.ts:447`, `:489` — and are overridable.)
 - **Concurrent `prompt` commands fail** with "agent already streaming" unless `streamingBehavior` is set. The client's typed `prompt(message, images?)` does NOT pass `streamingBehavior`; for steering, call `steer()` or use the lower-level command directly.
 - **Inline factory loading is in-process only.** You cannot pipe a factory function to a subprocess; extensions must be `.ts` files pi reads from disk.
 

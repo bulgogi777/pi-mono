@@ -70,7 +70,7 @@ Process-lifetime only — not persisted. To store a key, use `/login` interactiv
 
 When supplied alongside `--model`, scopes resolution to the named provider. Useful when the same model id exists in multiple providers (`gpt-4o` in `openai` and `openrouter`, `claude-*` in `anthropic` and `amazon-bedrock`).
 
-When supplied **without** `--model`, pi uses `defaultModelPerProvider[provider]` (`model-resolver.ts:14-42`) as the model.
+When supplied **without** `--model`, pi uses `defaultModelPerProvider[provider]` (`model-resolver.ts:14-51`) as the model.
 
 The provider id must resolve. Recognized sources:
 
@@ -103,10 +103,10 @@ Special case: `anthropic` provider checks `ANTHROPIC_OAUTH_TOKEN` **before** `AN
 ## Common gotchas
 
 - **`--model` glob is case-insensitive.** `--model "CLAUDE-*"` matches lowercase ids. Pi normalizes both sides during minimatch.
-- **`--provider` alone uses the default model.** Without `--model`, pi takes `defaultModelPerProvider[provider]` from `model-resolver.ts:14-42`. These IDs are pinned per pi release.
+- **`--provider` alone uses the default model.** Without `--model`, pi takes `defaultModelPerProvider[provider]` from `model-resolver.ts:14-51`. These IDs are pinned per pi release.
 - **`--api-key` doesn't persist.** Set the env var or use `/login` for cross-session persistence.
 - **`--models` patterns that match nothing fail loudly.** Pi rejects empty resolution to avoid silent misconfiguration.
-- **Anthropic OAuth detection happens during `getApiKey`, not flag parsing.** If you pass `--api-key sk-ant-oat...`, pi WILL detect the OAuth flow at request time (`anthropic.ts:761-763`), use Bearer auth, and emit the Claude Code identity preamble. The flag itself is just a string passthrough.
+- **Anthropic OAuth detection happens during `getApiKey`, not flag parsing.** If you pass `--api-key sk-ant-oat...`, pi WILL detect the OAuth flow at request time (`api/anthropic-messages.ts:828-830`), use Bearer auth, and emit the Claude Code identity preamble. The flag itself is just a string passthrough.
 - **`models.json` custom providers don't auto-discover env vars.** Without a matching entry in `env-api-keys.ts`, step 4 is skipped — set `apiKey` in `models.json` to point at an env var explicitly. See `reference/custom-providers.md`.
 
 ## Cross-references

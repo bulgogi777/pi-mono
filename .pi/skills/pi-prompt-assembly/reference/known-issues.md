@@ -1,6 +1,6 @@
 # Known Issues
 
-Bugs and behavioral surprises in pi's system-prompt assembly path. All cites against the current pin (`v0.79.10`, `8e190066`). Issues are listed with: symptom, root cause, workaround, and source pointers. When known, version markers track when an issue was first observed.
+Bugs and behavioral surprises in pi's system-prompt assembly path. All cites against the current pin (`v0.80.9`, `2d16f929`). Issues are listed with: symptom, root cause, workaround, and source pointers. When known, version markers track when an issue was first observed.
 
 ## Empty turns through `RpcClient` on the default-prompt branch (observed 0.71.1)
 
@@ -11,7 +11,7 @@ A host program embeds pi via `RpcClient` (subprocess), sends a `prompt` command,
 - `--system-prompt` is **not** passed.
 - `<cwd>/.pi/SYSTEM.md` and `~/.pi/agent/SYSTEM.md` are **not** present.
 
-So pi takes the **default-prompt branch** (`packages/coding-agent/src/core/system-prompt.ts:82-171`) rather than the customPrompt branch (`:53-80`).
+So pi takes the **default-prompt branch** (`packages/coding-agent/src/core/system-prompt.ts:74-161`) rather than the customPrompt branch (`:46-72`).
 
 Once any of these holds, the issue goes away:
 
@@ -23,8 +23,8 @@ Once any of these holds, the issue goes away:
 
 `buildSystemPrompt` chooses between two complete code paths:
 
-- **customPrompt branch** (`system-prompt.ts:53-80`): `customPrompt` body verbatim → APPEND_SYSTEM → `<project_context>` XML block wrapping AGENTS.md (`:60-67`; pre-0.75.0 this was a `# Project Context` Markdown heading) → skills (gated on `read` tool, `:71`) → date → cwd. No auto-generated preamble, no auto-tools list, no auto-guidelines.
-- **default-prompt branch** (`system-prompt.ts:82-171`): hard-coded `"You are an expert coding assistant…"` preamble (`:130-147`) → `Available tools:` table (filtered by `toolSnippets`, `:90-93`) → auto-derived `Guidelines:` block (`:112-125`) → Pi documentation block with absolute paths (`:140-147`) → APPEND_SYSTEM (`:149-151`) → `<project_context>` XML block (`:153-161`) → skills gate (`:164`) → date/cwd (`:168-170`).
+- **customPrompt branch** (`system-prompt.ts:46-72`): `customPrompt` body verbatim → APPEND_SYSTEM → `<project_context>` XML block wrapping AGENTS.md (`:54-61`; pre-0.75.0 this was a `# Project Context` Markdown heading) → skills (gated on `read` tool, `:65`) → cwd (the `Current date:` line was removed in 0.80.x). No auto-generated preamble, no auto-tools list, no auto-guidelines.
+- **default-prompt branch** (`system-prompt.ts:74-161`): hard-coded `"You are an expert coding assistant…"` preamble (`:121-138`) → `Available tools:` table (filtered by `toolSnippets`, `:82-84`) → auto-derived `Guidelines:` block (built `:87-119`, rendered `:128-129`) → Pi documentation block with absolute paths (`:131-138`) → APPEND_SYSTEM (`:140-142`) → `<project_context>` XML block (`:145-152`) → skills gate (`:155`) → cwd (`:159`; no date line since 0.80.x).
 
 The default branch is much longer. Section ordering is identical from APPEND_SYSTEM onward; the difference is the preamble + tools + guidelines + docs that prepends.
 
@@ -60,7 +60,7 @@ Open as of 0.71.1. The default-prompt branch should arguably degrade more gracef
 
 Pre-0.75.0, both branches emitted a Markdown `# Project Context` block with `## <absolute-path>` per file. PRs #4541 (`7577d3b8`) and #4709 (`aad8cf66`) changed both branches to wrap context in `<project_context>` / `<project_instructions path="...">` XML tags so models stop ingesting prompt content past the boundary when an AGENTS.md itself contains Markdown headings.
 
-Current shape (both branches, at the current pin `v0.79.10` / `8e190066`):
+Current shape (both branches, at the current pin `v0.80.9` / `2d16f929`):
 
 ```
 \n\n<project_context>\n\n
@@ -94,23 +94,23 @@ The `<available_skills>` block is the model's only signal that skills exist (the
 
 Always include `"read"` in `selectedTools` if you want skills to surface. If `read` is genuinely unavailable, skills cannot work in this configuration; consider alternatives (preset slash commands, prompt templates).
 
-## Date rollover invalidates the system-prompt cache
+## Date rollover invalidates the system-prompt cache — RESOLVED in 0.80.x
 
-### Symptom
+### Symptom (historical)
 
-First request after midnight local time produces a full `cacheWrite` for the system prompt, even though nothing about the user-facing config changed.
+Pre-0.80.x: the first request after midnight local time produced a full `cacheWrite` for the system prompt, even though nothing about the user-facing config changed.
 
-### Cause
+### Cause (historical)
 
-`buildSystemPrompt` appends `\nCurrent date: YYYY-MM-DD` as the very last system-prompt line before `\nCurrent working directory:` (`system-prompt.ts:77` for customPrompt branch, `:169` for default; at pin `v0.79.10` / `8e190066`). When `YYYY-MM-DD` rolls over, the system-prompt text changes, and Anthropic cache breakpoint #1b (`providers/anthropic.ts:950`) or #2 (`:941` in OAuth mode) invalidates.
+`buildSystemPrompt` used to append `\nCurrent date: YYYY-MM-DD` as the very last system-prompt line before `\nCurrent working directory:`. When `YYYY-MM-DD` rolled over, the system-prompt text changed, and Anthropic cache breakpoint #1b (now `api/anthropic-messages.ts:978`) or #2 (`:969` in OAuth mode) invalidated.
 
 ### Status
 
-By design — the LLM benefits from knowing the current date. The cache cost is one full system-prompt write per day. Not configurable.
+**Resolved.** The `Current date:` line was removed from the system prompt entirely in 0.80.x (commit `f4e9ca74`, fixes #6621). `buildSystemPrompt` now ends at `\nCurrent working directory:` (`system-prompt.ts:69` customPrompt branch, `:159` default) with no date, so this daily cache invalidation no longer occurs. If a host needs the model to know the date, it must inject it itself (e.g. via a per-prompt context block), which keeps it out of the cached system prefix.
 
 ### Workaround
 
-None upstream. Hosts that re-run pi for many short sessions per day pay this cost once per session-start. Long-running interactive sessions amortize it across many turns.
+No longer needed — the date is no longer in the system prompt. (Pre-0.80.x there was no upstream workaround; hosts re-running pi for many short sessions per day paid the cost once per session-start.)
 
 ## Cross-references
 

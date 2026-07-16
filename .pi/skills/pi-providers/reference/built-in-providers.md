@@ -25,7 +25,7 @@ The single source of truth for env-var → provider mapping is `packages/ai/src/
 
 | Provider ID (`auth.json` key) | Auth flavor | Primary env var(s) | Default model (HEAD) | Notes |
 |---|---|---|---|---|
-| `anthropic` | OAuth or API key | `ANTHROPIC_OAUTH_TOKEN` (precedence) → `ANTHROPIC_API_KEY` | `claude-opus-4-7` | OAuth = subscription/extra-usage billing — see `reference/auth-resolution.md`. |
+| `anthropic` | OAuth or API key | `ANTHROPIC_OAUTH_TOKEN` (precedence) → `ANTHROPIC_API_KEY` | `claude-opus-4-8` | OAuth = subscription/extra-usage billing — see `reference/auth-resolution.md`. |
 | `openai` | API key | `OPENAI_API_KEY` | `gpt-5.4` | |
 | `openai-codex` | OAuth | `/login` only (ChatGPT Plus/Pro) | `gpt-5.5` | Officially endorsed; see [Codex for OSS](https://developers.openai.com/community/codex-for-oss). |
 | `azure-openai-responses` | API key + URL | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_BASE_URL` or `AZURE_OPENAI_RESOURCE_NAME` | `gpt-5.4` | Optional `AZURE_OPENAI_API_VERSION`, `AZURE_OPENAI_DEPLOYMENT_NAME_MAP`. |
@@ -54,7 +54,7 @@ The single source of truth for env-var → provider mapping is `packages/ai/src/
 | `cloudflare-ai-gateway` | API key + account + gateway | `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID` | `workers-ai/@cf/moonshotai/kimi-k2.6` | Routes to OpenAI / Anthropic / Workers AI through one gateway. Auth modes: Workers-AI native, unified billing, stored BYOK, inline BYOK (`docs/providers.md:152-178`). |
 | `xiaomi` | API key | `XIAOMI_API_KEY` | `mimo-v2.5-pro` | **Added v0.72.0.** Xiaomi MiMo Token Plan (Anthropic-compatible endpoint). `/login` display name `"Xiaomi MiMo Token Plan"` (`provider-display-names.ts:27`). User-facing doc: `docs/providers.md:72-91`. |
 
-Default-model map source: `packages/coding-agent/src/core/model-resolver.ts:14-42` (`defaultModelPerProvider`).
+Default-model map source: `packages/coding-agent/src/core/model-resolver.ts:14-51` (`defaultModelPerProvider`).
 
 A few extras visible in env-api-keys.ts but **not in the `KnownProvider` union** because they're test/auxiliary:
 
