@@ -14,7 +14,8 @@
 - **Fork:** `origin` → `git@github.com:bulgogi777/pi-mono.git`
 - **Branch tracked:** `main`
 - **Working branch:** `expert/main` (all `.pi/` changes land here)
-- **Current pin:** `8e190066` (2026-06-22, tag `v0.79.10`; covers releases 0.79.0 → 0.79.10). Matches the installed npm runtime `@earendil-works/pi-coding-agent@0.79.10`. **0.79.x added project-trust gating** (headless RPC resolves untrusted → project `.pi/SYSTEM.md` dropped); the global `~/.pi/agent/SYSTEM.md` floor + version-aware `--approve` in consumers handle it. See `efforts/pi-code/kb/pi-anthropic-subscription-billing.md`.
+- **Current pin:** `2d16f929` (2026-07-16, tag `v0.80.9`; covers releases 0.80.1 → 0.80.9). Matches the installed npm runtime `@earendil-works/pi-coding-agent@0.80.9`. **0.80.x re-architected the AI package** (one-file-per-provider split): the anthropic OAuth/billing stealth path moved `packages/ai/src/providers/anthropic.ts` → **`packages/ai/src/api/anthropic-messages.ts`** — mechanism byte-identical (two-block identity+custom system, `sk-ant-oat` detect, `claude-code-20250219,oauth-2025-04-20` headers) but ALL prior `providers/anthropic.ts:NNN` cites are dead. Also NEW `agent_settled` RPC event (fires after `agent_end`); `waitForIdle()` repointed `agent_end`→`agent_settled`. Project-trust gating and `defaultModelPerProvider.anthropic="claude-opus-4-8"` UNCHANGED. See `efforts/pi-code/kb/pi-anthropic-subscription-billing.md`.
+  - **Prior pin:** `8e190066` (2026-06-22, tag `v0.79.10`; 0.79.0 → 0.79.10) — 0.79.x added project-trust gating (headless RPC resolves untrusted → project `.pi/SYSTEM.md` dropped; global `~/.pi/agent/SYSTEM.md` floor + version-aware `--approve` handle it).
 
 ### Update procedure
 
