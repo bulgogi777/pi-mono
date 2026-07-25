@@ -77,7 +77,7 @@ No deployment target for this expert. Pi is used locally as a CLI tool (`/home/d
 
 ### Confidence rules (repo)
 
-- Claims about behavior cite `file:line` in the pinned tree (`8e190066`)
+- Claims about behavior cite `file:line` in the pinned tree — always the **Current pin** declared above (today: `2d16f929`, `v0.80.9`), never a prior pin. *This line has drifted before; when bumping the pin, update it here too or the confidence rule silently authorizes stale cites.*
 - Claims about deployment cite a successful probe against the local binary
 - Claims about "best practice" cite the upstream docs or ≥2 independent usages in the codebase
 
