@@ -53,9 +53,12 @@ These are genuine repo tooling (use `@mariozechner/pi-coding-agent` `ExtensionAP
 
 Genuine workflow shortcuts for pi-mono development. Preserve.
 
+**Upstream-standard, NOT cruft (`.pi/git/`, `.pi/npm/`):**
+- Both hold only a self-suppressing `.gitignore` (`*` + `!.gitignore`) and are **tracked upstream** (`7a2e71bb`). They exist so pi can write scratch state there without polluting the index. They look empty; they are not disposable. **Preserve — do not remove.**
+  - *History:* a prior revision of this file claimed these were removed as scaffold-time cruft. That was wrong and the directories were never actually gone. Corrected 2026-07-24.
+
 **Cruft removed at scaffold time:**
-- `.pi/git/` and `.pi/npm/` — contained only `.gitignore` files (`* !.gitignore`), no substantive content. Removed.
-- `.pi/SYSTEM.sync-conflict-20260510-142931-PSCCMSD.md` — Syncthing conflict of the old intended identity file. Its substance was folded into this `APPEND_SYSTEM.md`. Removed.
+- `.pi/SYSTEM.sync-conflict-20260510-142931-PSCCMSD.md` — Syncthing conflict of the old intended identity file. Its substance was folded into this `APPEND_SYSTEM.md`. Removed (verified absent).
 
 ## Citation and verification discipline
 
