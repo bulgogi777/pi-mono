@@ -171,7 +171,7 @@ Each model can override `baseUrl`, `api`, `headers`, and `compat`. Useful when o
 
 ## Auth resolution for custom providers
 
-For both `models.json` and `pi.registerProvider` registrations, the API key flows through the same resolution path as built-ins — `ModelRuntime.getAuth(providerId)` (`model-runtime.ts:374-376`) → `composeApiKeyAuth` (`provider-composer.ts:293`). (Pre-v0.80.8 this was `AuthStorage.getApiKey`, now removed — see the stale-notice in `reference/auth-resolution.md`.) Precedence, pending re-derivation:
+For both `models.json` and `pi.registerProvider` registrations, the API key flows through the same resolution path as built-ins — `ModelRuntime.getAuth(providerId)` (`model-runtime.ts:374-376`) → `composeApiKeyAuth` (`provider-composer.ts:293`). (Pre-v0.80.8 this was `AuthStorage.getApiKey`, now removed.) Precedence — re-derived at v0.82.1, full table in `reference/auth-resolution.md`:
 
 1. **Runtime override** (`--api-key`, `pi.setApiKey`)
 2. **`auth.json` API-key entry** keyed by `providerId`
