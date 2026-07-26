@@ -28,7 +28,7 @@ Create a provider file exporting:
 
 - Add a package subpath export in `packages/ai/package.json` pointing at `./dist/providers/<provider>.js`.
 - Add `export type` re-exports in `packages/ai/src/index.ts` for provider option types that should remain available from the root entry.
-- Register the provider in `packages/ai/src/providers/register-builtins.ts` via lazy loader wrappers; do not statically import provider implementation modules there.
+- Register the provider in `packages/ai/src/providers/all.ts` — add the `import { <x>Provider } from "./<x>.ts"` and return it from `builtinProviders()`; `builtinModels()` (`all.ts:131-137`) loops those into the collection. **`register-builtins.ts` no longer exists**, and the "do not statically import" rule has inverted: `all.ts` *does* statically import every provider module. Laziness moved down a layer — the provider module imports its heavy API implementation from the `.lazy.ts` wrapper instead (e.g. `providers/anthropic.ts:1` → `../api/anthropic-messages.lazy.ts`). Keep the heavy streaming impl behind that wrapper.
 - Add credential detection in `packages/ai/src/env-api-keys.ts`.
 
 ## 4. Model Generation (`packages/ai/scripts/generate-models.ts`)
@@ -46,7 +46,7 @@ Create a provider file exporting:
 ## 6. Coding Agent (`packages/coding-agent/`)
 
 - `src/core/model-resolver.ts`: add default model ID to `defaultModelPerProvider`.
-- `src/core/provider-display-names.ts`: add API-key login display name so `/login` and related UI show the provider for built-in API-key auth.
+- ~~`src/core/provider-display-names.ts`~~ — **file removed** by `9993c969` (v0.80.8). The `/login` display name now comes from the provider definition's own `name` field in `packages/ai/src/providers/<provider>.ts` (e.g. `xiaomi.ts:9`), surfaced via `ModelRegistry.getProviderName()` (`model-registry.ts:99-101`). Set `name` when you create the provider; nothing separate to register.
 - `src/cli/args.ts`: add env var documentation.
 - `README.md`: add provider setup instructions.
 - `docs/providers.md`: add setup instructions, env var, and `auth.json` key.

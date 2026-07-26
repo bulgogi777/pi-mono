@@ -54,7 +54,7 @@ Within a single resolution pass, the package manager collects packages from **bo
 
 ## The `pi` manifest in `package.json`
 
-When `pi` resolves a package, it reads the package's `package.json` and looks for a `"pi"` field. Shape: `PiManifest` at `extensions/loader.ts:449-454`:
+When `pi` resolves a package, it reads the package's `package.json` and looks for a `"pi"` field. Shape: `PiManifest` at `extensions/loader.ts:462-467`:
 
 ```jsonc
 {
@@ -67,7 +67,7 @@ When `pi` resolves a package, it reads the package's `package.json` and looks fo
 }
 ```
 
-All four arrays are optional. Paths are resolved relative to the package's root. Files that don't exist are silently dropped during the manifest scan (`loader.ts:490`). For extensions specifically, `resolveExtensionEntries` (`loader.ts:482-512`) checks the `pi.extensions` field first; if absent, falls back to `index.ts` / `index.js` at the package root.
+All four arrays are optional. Paths are resolved relative to the package's root. Files that don't exist are silently dropped during the manifest scan (`loader.ts:503`). For extensions specifically, `resolveExtensionEntries` (`loader.ts:495-525`) checks the `pi.extensions` field first; if absent, falls back to `index.ts` / `index.js` at the package root.
 
 ## Resolution flow
 
@@ -75,13 +75,13 @@ All four arrays are optional. Paths are resolved relative to the package's root.
 
 1. Read both global and project `settings.json` (`package-manager.ts:2141-2147`).
 2. For each `PackageSource` in either array, parse and resolve to an installed local path (`getInstalledPath`, `:84-89`). Missing sources can trigger `onMissing` to install on demand or skip.
-3. For each installed package, read its `package.json` `pi` field via `readPiManifest` (`extensions/loader.ts:455-465`).
+3. For each installed package, read its `package.json` `pi` field via `readPiManifest` (`extensions/loader.ts:468-478`).
 4. Per resource type (`"extensions" | "skills" | "prompts" | "themes"`, `:185-187`), collect the file paths the manifest declares.
 5. Apply the `PackageSource` object-form filter (if set) to narrow which paths from each manifest survive.
 6. Merge user vs project results: **project-first** for collisions, dedup by absolute path.
 7. Return a `ResolvedPaths` (`package-manager.ts:59-64`) keyed by resource type, each entry a `ResolvedResource` (`:53-57`) carrying `path`, `metadata`, and `enabled`.
 
-The result feeds `DefaultResourceLoader` (`resource-loader.ts:395-405` for extensions), which then passes the merged file list to `loadExtensions`, `loadSkills`, etc.
+The result feeds `DefaultResourceLoader` (`resource-loader.ts:398-408` for extensions), which then passes the merged file list to `loadExtensions`, `loadSkills`, etc.
 
 ## Install internals
 
@@ -101,8 +101,8 @@ The discovery paths described in `reference/discovery-paths.md` (`<cwd>/.pi/exte
 ## Common gotchas
 
 - **`pi.extensions` can list files that don't exist** — they're silently dropped, not warned. Verify with `ls` after editing the manifest.
-- **The `pi` field must be an object.** If it's a string or array at the top level, `readPiManifest` returns `null` (`loader.ts:457-462`).
-- **`npmCommand`** is consulted only for `pi install` / `pi update`, not for runtime imports. Runtime extension loading uses `jiti` (`loader.ts:341-353`).
+- **The `pi` field must be an object.** If it's a string or array at the top level, `readPiManifest` returns `null` (`loader.ts:470-475`).
+- **`npmCommand`** is consulted only for `pi install` / `pi update`, not for runtime imports. Runtime extension loading uses `jiti` (`loader.ts:349-361`).
 - **Lockfile contention** during concurrent `pi install` runs uses `proper-lockfile` (`package-manager.ts:855` and surroundings) — concurrent runs serialize rather than corrupt.
 - **Local paths in `packages` are NOT walked recursively** for resources. They follow the same `pi.extensions` manifest contract as npm packages. For ad-hoc local development, prefer the loose `<cwd>/.pi/extensions/` directory.
 

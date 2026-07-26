@@ -31,13 +31,13 @@ This pattern generalises to any framed-protocol-over-stdio subprocess (panel-mem
 
 ## Request/response correlation
 
-Every `RpcCommand` has an optional `id?: string` (`rpc-types.ts:21`). When set, the `RpcResponse` echoes the same `id` (`rpc-types.ts:111+`). Hosts SHOULD set `id` on every command and demultiplex by it; the schema also permits omitting `id` for fire-and-forget hosts.
+Every `RpcCommand` has an optional `id?: string` (`rpc-types.ts:21`). When set, the `RpcResponse` echoes the same `id` (`rpc-types.ts:110+`). Hosts SHOULD set `id` on every command and demultiplex by it; the schema also permits omitting `id` for fire-and-forget hosts.
 
 Events (the `AgentSessionEvent` stream — see below) **never** carry an `id`. They are unsolicited stdout traffic.
 
 ## RpcCommand catalog
 
-The discriminated union is `RpcCommand` at `rpc-types.ts:19-69`. Per-command handler dispatch is the `switch (command.type)` block in `rpc-mode.ts:handleCommand` (`rpc-mode.ts:374-700`). The grouping below mirrors the type file; `Lines` points to the type-union variant in `rpc-types.ts`; `Handler` points to the case body in `rpc-mode.ts`.
+The discriminated union is `RpcCommand` at `rpc-types.ts:19-71`. Per-command handler dispatch is the `switch (command.type)` block in `rpc-mode.ts:handleCommand` (`rpc-mode.ts:374-707`). The grouping below mirrors the type file; `Lines` points to the type-union variant in `rpc-types.ts`; `Handler` points to the case body in `rpc-mode.ts`.
 
 ### Prompting (responses are async)
 
@@ -57,12 +57,12 @@ The discriminated union is `RpcCommand` at `rpc-types.ts:19-69`. Per-command han
 
 | `type` | Lines | Handler | Response data |
 |---|---|---|---|
-| `get_state` | `:28` | `rpc-mode.ts:431-452` | `RpcSessionState` (`rpc-types.ts:88-103`): `model`, `thinkingLevel`, `isStreaming`, `isCompacting`, `steeringMode`, `followUpMode`, `sessionFile`, `sessionId`, `sessionName`, `autoCompactionEnabled`, `messageCount`, `pendingMessageCount`. |
-| `get_messages` | `:67` | `rpc-mode.ts:614-621` | `{ messages: AgentMessage[] }` |
-| `get_session_stats` | `:55` | `rpc-mode.ts:553-557` | `SessionStats` (`agent-session.ts`) |
-| `get_last_assistant_text` | `:62` | `rpc-mode.ts:596-600` | `{ text: string \| null }` |
-| `get_fork_messages` | `:61` | `rpc-mode.ts:591-595` | `{ messages: Array<{ entryId, text }> }` — for fork-target picker UIs. |
-| `get_commands` | `:69` | `rpc-mode.ts:622-…` | `{ commands: RpcSlashCommand[] }` (`rpc-types.ts:78-86`) |
+| `get_state` | `:28` | `rpc-mode.ts:431-452` | `RpcSessionState` (`rpc-types.ts:89-104`): `model`, `thinkingLevel`, `isStreaming`, `isCompacting`, `steeringMode`, `followUpMode`, `sessionFile`, `sessionId`, `sessionName`, `autoCompactionEnabled`, `messageCount`, `pendingMessageCount`. |
+| `get_messages` | `:67` | `rpc-mode.ts:620-627` | `{ messages: AgentMessage[] }` |
+| `get_session_stats` | `:55` | `rpc-mode.ts:558-563` | `SessionStats` (`agent-session.ts`) |
+| `get_last_assistant_text` | `:62` | `rpc-mode.ts:602-606` | `{ text: string \| null }` |
+| `get_fork_messages` | `:61` | `rpc-mode.ts:589-601` | `{ messages: Array<{ entryId, text }> }` — for fork-target picker UIs. |
+| `get_commands` | `:69` | `rpc-mode.ts:628-…` | `{ commands: RpcSlashCommand[] }` (`rpc-types.ts:79-87`) |
 | `get_available_models` | `:32` | `rpc-mode.ts:471-479` | `{ models: Model<any>[] }` |
 
 ### Model / thinking
@@ -79,49 +79,49 @@ The discriminated union is `RpcCommand` at `rpc-types.ts:19-69`. Per-command han
 | `type` | Args | Lines | Handler |
 |---|---|---|---|
 | `set_steering_mode` | `mode: "all" \| "one-at-a-time"` | `:40` | `rpc-mode.ts:497-501` |
-| `set_follow_up_mode` | `mode: "all" \| "one-at-a-time"` | `:41` | `rpc-mode.ts:502-506` |
+| `set_follow_up_mode` | `mode: "all" \| "one-at-a-time"` | `:41` | `rpc-mode.ts:502-512` |
 
 ### Compaction / retry
 
 | `type` | Args | Lines | Handler | Response |
 |---|---|---|---|---|
-| `compact` | `customInstructions?` | `:44` | `rpc-mode.ts:511-515` | `data: CompactionResult` |
-| `set_auto_compaction` | `enabled: boolean` | `:45` | `rpc-mode.ts:516-524` | — |
-| `set_auto_retry` | `enabled: boolean` | `:48` | `rpc-mode.ts:525-529` | — |
-| `abort_retry` | — | `:49` | `rpc-mode.ts:530-538` | — |
+| `compact` | `customInstructions?` | `:44` | `rpc-mode.ts:516-521` | `data: CompactionResult` |
+| `set_auto_compaction` | `enabled: boolean` | `:45` | `rpc-mode.ts:521-530` | — |
+| `set_auto_retry` | `enabled: boolean` | `:48` | `rpc-mode.ts:530-535` | — |
+| `abort_retry` | — | `:49` | `rpc-mode.ts:535-544` | — |
 
 ### Bash
 
 | `type` | Args | Lines | Handler | Response |
 |---|---|---|---|---|
-| `bash` | `command: string` | `:52` | `rpc-mode.ts:539-543` | `data: BashResult` |
-| `abort_bash` | — | `:53` | `rpc-mode.ts:544-552` | — |
+| `bash` | `command: string` | `:52` | `rpc-mode.ts:544-549` | `data: BashResult` |
+| `abort_bash` | — | `:53` | `rpc-mode.ts:549-558` | — |
 
 ### Session manipulation
 
 | `type` | Args | Lines | Handler | Response |
 |---|---|---|---|---|
-| `export_html` | `outputPath?` | `:56` | `rpc-mode.ts:558-562` | `data: { path: string }` |
-| `switch_session` | `sessionPath: string` | `:57` | `rpc-mode.ts:563-570` | `data: { cancelled: boolean }` — cancellable via `session_before_switch` |
-| `fork` | `entryId: string` | `:58` | `rpc-mode.ts:571-578` | `data: { text: string; cancelled: boolean }` — cancellable via `session_before_fork` |
-| `clone` | — | `:59` | `rpc-mode.ts:579-590` | `data: { cancelled: boolean }` |
-| `set_session_name` | `name: string` | `:63` | `rpc-mode.ts:601-613` | — |
+| `export_html` | `outputPath?` | `:56` | `rpc-mode.ts:552-568` | `data: { path: string }` |
+| `switch_session` | `sessionPath: string` | `:57` | `rpc-mode.ts:564-576` | `data: { cancelled: boolean }` — cancellable via `session_before_switch` |
+| `fork` | `entryId: string` | `:58` | `rpc-mode.ts:577-585` | `data: { text: string; cancelled: boolean }` — cancellable via `session_before_fork` |
+| `clone` | — | `:59` | `rpc-mode.ts:585-588` | `data: { cancelled: boolean }` |
+| `set_session_name` | `name: string` | `:63` | `rpc-mode.ts:595-619` | — |
 
 `fork` performs an in-place leaf-move-plus-summary inside the same `.jsonl`. The new-file `forkFrom` operation lives behind `--fork` at startup, not behind this RPC command — see **pi-sessions** for the in-place-vs-new-file distinction.
 
 ### Generic error response
 
-Any command can fail with `{ id, type: "response", command, success: false, error: string }` (`rpc-types.ts:111+`). Parse failures (malformed JSON line) come back with `command: "parse"` (`rpc.md:1190-1198`).
+Any command can fail with `{ id, type: "response", command, success: false, error: string }` (`rpc-types.ts:110+`). Parse failures (malformed JSON line) come back with `command: "parse"` (`rpc.md:1190-1198`).
 
 ## Event stream
 
-Pi emits the `AgentSessionEvent` union (`packages/coding-agent/src/core/agent-session.ts:136-162`, also documented at `packages/coding-agent/docs/json.md:11-21`). It composes the base `AgentEvent` from `packages/agent/src/types.ts:415` plus pi-coding-agent-specific events. Events have no `id` field.
+Pi emits the `AgentSessionEvent` union (`packages/coding-agent/src/core/agent-session.ts:139-181`, also documented at `packages/coding-agent/docs/json.md:11-21`). It composes the base `AgentEvent` from `packages/agent/src/types.ts:420` plus pi-coding-agent-specific events. Events have no `id` field.
 
 | Event `type` | Payload | Emitted when |
 |---|---|---|
 | `agent_start` | — | Agent begins processing a prompt. |
-| `agent_end` | `messages: AgentMessage[]`, `willRetry: boolean` | The agent loop finished a run. `willRetry: true` means an auto-compaction/retry will re-enter the loop, so this is **not** terminal. Payload gained `willRetry` in 0.80.x (`agent-session.ts:139-142`; predicate `_willRetryAfterAgentEnd` at `:647`, terminal `stopReason !== "stop"` at `:1966`). |
-| `agent_settled` | — | **New in 0.80.x** (`agent-session.ts:143`). Emitted once, *after* the final `agent_end`, when the loop has fully drained (steering + follow-up queues empty, no retry pending). Emitted at `agent-session.ts:563-564` via `_emitAgentSettled()` (`:1059`). This — not `agent_end` — is what `RpcClient.waitForIdle()` now resolves on. |
+| `agent_end` | `messages: AgentMessage[]`, `willRetry: boolean` | The agent loop finished a run. `willRetry: true` means an auto-compaction/retry will re-enter the loop, so this is **not** terminal. Payload gained `willRetry` in 0.80.x (`agent-session.ts:142-145`; predicate `_willRetryAfterAgentEnd` at `:647`, terminal `stopReason !== "stop"` at `:1966`). |
+| `agent_settled` | — | **New in 0.80.x** (`agent-session.ts:146`). Emitted once, *after* the final `agent_end`, when the loop has fully drained (steering + follow-up queues empty, no retry pending). Emitted at `agent-session.ts:584-585` via `_emitAgentSettled()` (`:1059`). This — not `agent_end` — is what `RpcClient.waitForIdle()` now resolves on. |
 | `turn_start` | — | Each turn begins (one assistant response + its tool results). |
 | `turn_end` | `message: AgentMessage`, `toolResults: ToolResultMessage[]` | Each turn completes. |
 | `message_start` | `message: AgentMessage` | Any message (user / assistant / toolResult) begins. |
