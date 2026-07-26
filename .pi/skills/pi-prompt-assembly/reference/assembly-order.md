@@ -1,6 +1,6 @@
 # System Prompt Assembly Order
 
-Section-by-section breakdown of what `buildSystemPrompt` produces, branch by branch. All cites against `packages/coding-agent/src/core/system-prompt.ts` at the current pin (`v0.80.9`, `2d16f929`). Note: in 0.80.x the `Current date:` line was **removed** from the system prompt (commit `f4e9ca74`, fixes #6621), shifting all line numbers in this file down by ~10.
+Section-by-section breakdown of what `buildSystemPrompt` produces, branch by branch. All cites against `packages/coding-agent/src/core/system-prompt.ts` at the current pin (`v0.82.1`, `b4f29368`). Note: in 0.80.x the `Current date:` line was **removed** from the system prompt (commit `f4e9ca74`, fixes #6621), shifting all line numbers in this file down by ~10.
 
 ## Entry point
 
@@ -67,11 +67,11 @@ Wrapped in `<available_skills>…</available_skills>` plus a three-line preamble
 
 ## What this means for cache layout
 
-The system prompt becomes a single string passed downstream as `context.systemPrompt`. The Anthropic provider (`packages/ai/src/api/anthropic-messages.ts`) wraps it in a single text block with a single `cache_control` breakpoint at `api/anthropic-messages.ts:978` (non-OAuth) or `:969` (OAuth user-system block, after the constant identity preamble at `:962`). Order matters: anything inserted earlier is part of the cached prefix; anything inserted later still falls inside the same cache block because the entire system prompt is one block. See `reference/cache-breakpoints.md` for the cascade rules.
+The system prompt becomes a single string passed downstream as `context.systemPrompt`. The Anthropic provider (`packages/ai/src/api/anthropic-messages.ts`) wraps it in a single text block with a single `cache_control` breakpoint at `api/anthropic-messages.ts:979` (non-OAuth) or `:969` (OAuth user-system block, after the constant identity preamble at `:962`). Order matters: anything inserted earlier is part of the cached prefix; anything inserted later still falls inside the same cache block because the entire system prompt is one block. See `reference/cache-breakpoints.md` for the cascade rules.
 
 ## Cross-references
 
 - The pre-loading of `contextFiles` (AGENTS.md / CLAUDE.md ancestor walk) and `skills` lives in **pi-architecture** (`reference/discovery-paths.md`). This skill only documents how those pre-loaded values get rendered into the final string.
-- **Trust gating on project SYSTEM.md / APPEND_SYSTEM.md / AGENTS.md.** Project `<cwd>/.pi/SYSTEM.md` and `APPEND_SYSTEM.md` are loaded only when `isProjectTrusted()` is true (`resource-loader.ts:966-967, :980-981`). The global `~/.pi/agent/SYSTEM.md` and `APPEND_SYSTEM.md` floor is ungated (`:971-972, :985-986`) and survives headless RPC in untrusted cwds. `AGENTS.md` / `CLAUDE.md` context files are loaded regardless of trust (`docs/security.md`). Full trust resolution chain lives in **pi-architecture**.
+- **Trust gating on project SYSTEM.md / APPEND_SYSTEM.md / AGENTS.md.** Project `<cwd>/.pi/SYSTEM.md` and `APPEND_SYSTEM.md` are loaded only when `isProjectTrusted()` is true (`resource-loader.ts:970-971, :980-981`). The global `~/.pi/agent/SYSTEM.md` and `APPEND_SYSTEM.md` floor is ungated (`:971-972, :985-986`) and survives headless RPC in untrusted cwds. `AGENTS.md` / `CLAUDE.md` context files are loaded regardless of trust (`docs/security.md`). Full trust resolution chain lives in **pi-architecture**.
 - Extension hooks that can replace the system prompt (`before_agent_start` returning `systemPrompt`) are **pi-extensions** territory.
 - `--system-prompt` and `--append-system-prompt` resolve via `resolvePromptInput` at `packages/coding-agent/src/core/resource-loader.ts:50-65` — file-if-exists, else literal text.

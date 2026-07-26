@@ -4,7 +4,7 @@ Three intersecting topics: how to register a custom tool, how to mutate or block
 
 ## pi.registerTool — dynamic tool definition
 
-Signature: `pi.registerTool<TParams, TDetails, TState>(tool)` at `packages/coding-agent/src/core/extensions/types.ts:1133-1135`. Takes a `ToolDefinition` (`types.ts:426-473`).
+Signature: `pi.registerTool<TParams, TDetails, TState>(tool)` at `packages/coding-agent/src/core/extensions/types.ts:1146-1148`. Takes a `ToolDefinition` (`types.ts:431-480`).
 
 `ToolDefinition` fields:
 
@@ -23,13 +23,13 @@ Signature: `pi.registerTool<TParams, TDetails, TState>(tool)` at `packages/codin
 | `renderCall` | optional | `:463` | TUI custom rendering for the call display. |
 | `renderResult` | optional | `:466-471` | TUI custom rendering for the result display. |
 
-Helper: `defineTool(tool)` at `types.ts:485-489` preserves parameter inference when assigning a tool to a variable. Useful when the tool flows through `customTools[]` arrays.
+Helper: `defineTool(tool)` at `types.ts:492-496` preserves parameter inference when assigning a tool to a variable. Useful when the tool flows through `customTools[]` arrays.
 
 **Late registration** is supported — call `pi.registerTool` from a hook handler (`session_start`, `before_agent_start`, etc.) or a command handler. See `examples/extensions/dynamic-tools.ts`.
 
 ## ToolCallEvent — mutate or block
 
-Hook subscription: `pi.on("tool_call", handler)`. Discriminated union `ToolCallEvent` at `types.ts:822-831` with eight variants — one per built-in tool (`bash`, `read`, `edit`, `write`, `grep`, `find`, `ls`) plus `CustomToolCallEvent` for everything else (`types.ts:811-815`).
+Hook subscription: `pi.on("tool_call", handler)`. Discriminated union `ToolCallEvent` at `types.ts:829-838` with eight variants — one per built-in tool (`bash`, `read`, `edit`, `write`, `grep`, `find`, `ls`) plus `CustomToolCallEvent` for everything else (`types.ts:818-822`).
 
 Per-variant shape: `{ type: "tool_call"; toolCallId: string; toolName: <literal>; input: <typed input> }`. The literal `toolName` discriminates the union, so `event.input` is fully typed inside each branch:
 
@@ -48,7 +48,7 @@ pi.on("tool_call", async (event, ctx) => {
 
 ### How to mutate input — **mutate `event.input` in place**
 
-There is **no `setInput()` setter**. The contract is documented in the JSDoc above the union at `types.ts:817-823`:
+There is **no `setInput()` setter**. The contract is documented in the JSDoc above the union at `types.ts:824-830`:
 
 > `event.input` is mutable. Mutate it in place to patch tool arguments before execution. Later `tool_call` handlers see earlier mutations. No re-validation is performed after mutation.
 
@@ -67,7 +67,7 @@ pi.on("tool_call", async (event, ctx) => {
 
 ### How to block — return `{ block: true, reason }`
 
-Result type `ToolCallEventResult` at `types.ts:984-989`:
+Result type `ToolCallEventResult` at `types.ts:993-998`:
 
 ```ts
 { block?: boolean; reason?: string }
@@ -89,22 +89,22 @@ Examples: `examples/extensions/permission-gate.ts` (block dangerous commands), `
 
 ## tool_result — rewrite the result
 
-Hook: `pi.on("tool_result", handler)`. Symmetric to `tool_call` but fires after execution. `ToolResultEvent` union at `types.ts:881-889`. Result type `ToolResultEventResult` (`types.ts:998-1003`) lets a handler return `{ content?, details?, isError? }` to rewrite the result the LLM sees. Merge logic at `runner.ts:~762-805`.
+Hook: `pi.on("tool_result", handler)`. Symmetric to `tool_call` but fires after execution. `ToolResultEvent` union at `types.ts:888-896`. Result type `ToolResultEventResult` (`types.ts:1000-1012`) lets a handler return `{ content?, details?, isError? }` to rewrite the result the LLM sees. Merge logic at `runner.ts:~762-805`.
 
 Useful for: redacting sensitive output, normalizing error formats, injecting follow-up instructions in the result text.
 
 ## MessageEndEvent — replace the finalized message
 
-Hook: `pi.on("message_end", handler)`. Result type `MessageEndEventResult` at `types.ts:1006-1008` — `{ message?: AgentMessage }`. The replacement returned in `result.message` becomes the message the rest of the system sees.
+Hook: `pi.on("message_end", handler)`. Result type `MessageEndEventResult` at `types.ts:1015-1017` — `{ message?: AgentMessage }`. The replacement returned in `result.message` becomes the message the rest of the system sees.
 
 ### The same-role rule
 
-Merge logic at `runner.ts:714-754`. For each handler:
+Merge logic at `runner.ts:743-783`. For each handler:
 
 1. Build a fresh event with the **current** message and pass to handler.
 2. If `handlerResult?.message` is set:
-   - **Check role equality** at `runner.ts:729`: `if (handlerResult.message.role !== currentMessage.role) { ... }` → emits an `extension_error` and **discards** the replacement (`runner.ts:730-735`).
-   - Otherwise, the replacement becomes the new `currentMessage` and chains forward (`runner.ts:738-739`).
+   - **Check role equality** at `runner.ts:758`: `if (handlerResult.message.role !== currentMessage.role) { ... }` → emits an `extension_error` and **discards** the replacement (`runner.ts:737-764`).
+   - Otherwise, the replacement becomes the new `currentMessage` and chains forward (`runner.ts:737-768`).
 
 So you can replace an assistant message with a different assistant message, but **you cannot turn an assistant message into a user message** via `message_end`. The constraint exists because the message tree's tool-call/tool-result pairing depends on role.
 
@@ -118,4 +118,4 @@ Examples: `examples/extensions/structured-output.ts`, `examples/extensions/trunc
 
 - Full hook event catalog incl. `tool_call`, `tool_result`, `message_end`: `reference/hook-events.md`.
 - `ToolCallEvent` and `ToolResultEvent` payload shapes per built-in tool: see hook-events.md "Tool execution" section.
-- TUI rendering for tool call/result: `renderCall` / `renderResult` in `ToolDefinition`. `ToolRenderContext` at `types.ts:396-422`.
+- TUI rendering for tool call/result: `renderCall` / `renderResult` in `ToolDefinition`. `ToolRenderContext` at `types.ts:401-427`.

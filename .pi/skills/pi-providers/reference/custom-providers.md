@@ -37,7 +37,7 @@ For Ollama, only the model `id` is required:
 
 ### Full provider entry
 
-`ProviderConfigInput` shape at `packages/coding-agent/src/core/model-registry.ts:913-935`:
+`ProviderConfigInput` shape at `packages/coding-agent/src/core/provider-composer.ts:44-68` (moved out of `model-registry.ts` by `9993c969`, v0.80.8; still re-exported from `model-registry.ts:5` for compatibility):
 
 ```ts
 {
@@ -70,11 +70,11 @@ Fields are optional in `models.json` because pi falls back to sensible defaults 
 
 ### Per-model `baseUrl` (fixed in v0.72.0)
 
-Before v0.72.0, `pi.registerProvider()` and `models.json` ignored per-model `baseUrl` fields, always falling back to the provider-level `baseUrl`. Fixed at `packages/coding-agent/src/core/model-registry.ts:886` — `modelDef.baseUrl ?? config.baseUrl!` ([#4063](https://github.com/badlogic/pi-mono/issues/4063)). After upgrade, models with their own `baseUrl` route there as expected.
+Before v0.72.0, `pi.registerProvider()` and `models.json` ignored per-model `baseUrl` fields, always falling back to the provider-level `baseUrl`. Fixed in `provider-composer.ts` (relocated from `model-registry.ts:886` by `9993c969`, v0.80.8) — `definition.baseUrl ?? providerConfig.baseUrl ?? defaults?.baseUrl` at `:136` for the `models.json` path and `:218` for the `pi.registerProvider()` path ([#4063](https://github.com/badlogic/pi-mono/issues/4063)). After upgrade, models with their own `baseUrl` route there as expected.
 
 ### thinking levels: `thinkingLevelMap` (added v0.72.0, replaces `reasoningEffortMap`)
 
-v0.72.0 introduced model-level thinking-level metadata. Type at `packages/ai/src/types.ts:51`:
+v0.72.0 introduced model-level thinking-level metadata. Type at `packages/ai/src/types.ts:54`:
 
 ```ts
 type ThinkingLevelMap = Partial<Record<ModelThinkingLevel, string | null>>;
@@ -171,12 +171,12 @@ Each model can override `baseUrl`, `api`, `headers`, and `compat`. Useful when o
 
 ## Auth resolution for custom providers
 
-For both `models.json` and `pi.registerProvider` registrations, the API key flows through `AuthStorage.getApiKey(providerId)` (`auth-storage.ts:455-514`) — the same five-step order documented in `reference/auth-resolution.md`:
+For both `models.json` and `pi.registerProvider` registrations, the API key flows through the same resolution path as built-ins — `ModelRuntime.getAuth(providerId)` (`model-runtime.ts:374-376`) → `composeApiKeyAuth` (`provider-composer.ts:293`). (Pre-v0.80.8 this was `AuthStorage.getApiKey`, now removed — see the stale-notice in `reference/auth-resolution.md`.) Precedence, pending re-derivation:
 
 1. **Runtime override** (`--api-key`, `pi.setApiKey`)
 2. **`auth.json` API-key entry** keyed by `providerId`
 3. **`auth.json` OAuth entry** keyed by `providerId`
-4. **Environment variable** — but custom providers are **not in `env-api-keys.ts:101-130`**, so this step returns nothing for them
+4. **Environment variable** — but custom providers are **not in `env-api-keys.ts:108-120`**, so this step returns nothing for them
 5. **Custom resolver fallback** — this is where `models.json`'s `apiKey` field surfaces
 
 Step 5 is implemented as a `fallbackResolver` callback registered by the model registry. The `apiKey` string in `models.json` is interpreted via `resolveConfigValue` (in `core/resolve-config-value.ts`), which supports the same three forms as `auth.json`:

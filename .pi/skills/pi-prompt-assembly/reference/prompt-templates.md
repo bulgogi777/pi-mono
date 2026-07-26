@@ -27,11 +27,11 @@ The basename (minus `.md`) becomes the template name. So `~/.pi/agent/prompts/re
 
 ## Discovery and loading
 
-`loadPromptTemplates(options)` at `prompt-templates.ts:207-280`. Order:
+`loadPromptTemplates(options)` at `prompt-templates.ts:208-281`. Order:
 
-1. **Global first** — `<agentDir>/prompts/` (`prompt-templates.ts:248`).
-2. **Project second** — `<cwd>/.pi/prompts/` (`prompt-templates.ts:249`).
-3. **CLI paths last** — explicit `promptPaths` from `--prompt-template` (`prompt-templates.ts:254-273`).
+1. **Global first** — `<agentDir>/prompts/` (`prompt-templates.ts:249`).
+2. **Project second** — `<cwd>/.pi/prompts/` (`prompt-templates.ts:250`).
+3. **CLI paths last** — explicit `promptPaths` from `--prompt-template` (`prompt-templates.ts:255-274`).
 
 Both directory and file paths are accepted in CLI args. Directories are walked one level for `*.md`. Note the precedence is **global-first** — opposite of skills (which are user-first) and SYSTEM.md (project-first). See **pi-architecture** `reference/discovery-paths.md` for the full per-resource precedence matrix.
 
@@ -39,7 +39,7 @@ Both directory and file paths are accepted in CLI args. Directories are walked o
 
 ## Expansion — `expandPromptTemplate`
 
-`expandPromptTemplate(text, templates)` at `prompt-templates.ts:282-296`:
+`expandPromptTemplate(text, templates)` at `prompt-templates.ts:269-285`:
 
 1. Short-circuit if input does not start with `/` (`:283`).
 2. Split on the first space: `templateName = text.slice(1, spaceIndex)` (`:286-287`).
@@ -51,7 +51,7 @@ This means **template lookup is silent** — `/foo` with no matching template ju
 
 ## Argument substitution — `substituteArgs`
 
-`substituteArgs(content, args)` at `prompt-templates.ts:68-103`. Five replacement patterns, applied in this order:
+`substituteArgs(content, args)` at `prompt-templates.ts:69-104`. Five replacement patterns, applied in this order:
 
 1. **`$1`, `$2`, ...** — positional args, 1-indexed (`:73-76`).
 2. **`${@:start:length}`** — bash-style slicing, 1-indexed start (`:81-91`). `${@:2}` = "from arg 2 onwards joined by spaces". `${@:2:3}` = "3 args starting from arg 2 joined".
@@ -74,7 +74,7 @@ if (expandPromptTemplates) {
 }
 ```
 
-(Cite: `agent-session.ts:1001-1003`, also at `:1184` and `:1204` for steer/follow-up paths.)
+(Cite: `agent-session.ts:1013-1015`, also at `:1184` and `:1204` for steer/follow-up paths.)
 
 So:
 
@@ -83,7 +83,7 @@ So:
 3. **Prompt templates expand second.** If after skill expansion the result still starts with `/`, prompt template lookup runs.
 4. The expanded text is then handed to the agent loop, which assembles the system prompt (see `reference/assembly-order.md`) and sends to the LLM.
 
-The expansion happens **before** the `input` extension hook fires (`agent-session.ts:983` is `emitInput`, which runs **after** template expansion — so input handlers see the expanded text).
+The expansion happens **before** the `input` extension hook fires (`agent-session.ts:985` is `emitInput`, which runs **after** template expansion — so input handlers see the expanded text).
 
 The `expandPromptTemplates` flag is `true` by default; the SDK exposes it as a per-prompt option for callers that want raw text passthrough.
 
