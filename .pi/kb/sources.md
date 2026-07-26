@@ -38,6 +38,10 @@ git diff <old-pin>.."v$RUNTIME" -- packages/                  # territory review
 # bump Current pin: above to the v$RUNTIME sha, then: git push origin expert/main --force-with-lease
 ```
 
+> **Re-anchor cites by CONTENT MATCH, never by diff arithmetic.** To map `file:line` across a pin bump, take the cited line's exact text from the OLD tree (`git show <oldtag>:<path>`) and find that text in the NEW tree. Mapping via `git diff -U0` hunk offsets *looks* right and is silently wrong across pure-insertion hunks — on the 0.80.9 → 0.82.1 pass, **297 of 451 arithmetic results were off** (caught via `extensions/types.ts:673`, mapped to `:677`, actually `:680`). Content matching is verifiable per cite; arithmetic is not. Where the old line's text no longer exists anywhere, the *mechanism* changed — re-derive the claim or flag it stale, do not re-point the number.
+
+> **Model-availability questions cannot be answered from the pinned tree** (since 0.81.x). `packages/ai/src/providers/*.models.ts` are wrappers over `./data/<provider>.json`, and `providers/data/` is **gitignored** — generated at build from models.dev, shipped only in the npm tarball. To answer "does release X know model Y?": `npm pack @earendil-works/pi-ai@<version>` then read `package/dist/providers/data/anthropic.json`. Reading the git tree will tell you the model doesn't exist when it does.
+
 > **Gap-scan is MANDATORY, not optional, after any large-diff or AI-package upgrade.** Big refactors relocate files and shift every line (e.g. 0.80.x moved the whole anthropic OAuth/billing path `providers/anthropic.ts` → `api/anthropic-messages.ts`, breaking every cite). Cites also rot *between* upgrades (0.80.9 revealed the provider catalog had already drifted 27→36 unnoticed) — run a periodic drift scan independent of version bumps. Track cite-drift found-but-out-of-scope as its own workitem rather than expanding the upgrade.
 
 ### Post-upgrade verification (run BEFORE bumping the pin — any failure ⇒ rollback, do not pin)

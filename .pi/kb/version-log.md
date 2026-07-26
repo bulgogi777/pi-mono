@@ -6,6 +6,51 @@ Citations: `<sha>` for commit; `<file>:<line>` against the **new pin** (unless o
 
 ---
 
+## 2026-07-25 — pulled to `b4f29368` (v0.82.1)
+
+> Runtime npm global upgraded `0.80.9 → 0.82.1` and **verified live before the pin bump** (all four gates in `sources.md` passed: consult RPC 4.46s clean exit, `cacheWrite=53158` OAuth subscription cache path, model resolve, trust gating). `main` fast-forwarded to `v0.82.1`; `expert/main` rebased clean (`.pi/`-only, 13 commits). Trigger: Anthropic released **Claude Opus 5** and we needed to know whether pi had it.
+
+**Previous pin:** `2d16f929` (2026-07-16; covers 0.80.1 → 0.80.9)
+**Target:** tag `v0.82.1` = `b4f29368`. New releases in range: `0.80.10`, `0.81.0`, `0.81.1`, `0.82.0`, `0.82.1`.
+**Diff scope:** `v0.80.9..v0.82.1` = 372 files, ~18.3k insertions / ~21.1k deletions.
+
+### Behavior changes that matter (territory) — verdict: SAFE
+
+**Anthropic OAuth/billing stealth — did NOT move again (high)**
+- Path stable at `packages/ai/src/api/anthropic-messages.ts` (+37/-8). `sk-ant-oat` detect `:838-839`; `anthropic-beta: claude-code-20250219,oauth-2025-04-20` `:894` (was `:884`). Two-block system intact: identity `:971` / `cache_control` `:972`, OAuth user system `:979`, non-OAuth `:988`. Last-tool breakpoint `:1311`, last-user `:1247-1268`.
+
+**Model catalog LEFT THE GIT TREE (high) — new substrate rule**
+- `providers/*.models.ts` are now thin wrappers over `./data/<provider>.json`, and `packages/ai/src/providers/data/` is **gitignored** (built from models.dev, shipped only in the npm tarball). Model-availability questions are **unanswerable from the pinned tree** — unpack `npm pack @earendil-works/pi-ai@<v>` → `package/dist/providers/data/anthropic.json`.
+
+**Claude Opus 5 (medium-high)**
+- `claude-opus-5` first ships in the built-in catalog at **v0.82.1** (generator `921c3543`; Bedrock `af3b934f`). Entry: 1M context, 128k output, `forceAdaptiveThinking`, `supportsTemperature:false`, `thinkingLevelMap {xhigh,max}`, cost 5/25/0.5/6.25.
+- Note: the runtime `models-store.json` **remote** catalog had already fetched an identical opus-5 entry under 0.80.9 — effective availability preceded the shipped catalog. Built-in default `defaultModelPerProvider.anthropic` remains `claude-opus-4-8` (`model-resolver.ts:17`); upstream did not change it.
+
+**Trust gating / RPC — intact (high)**
+- `resource-loader.ts` +4 (directory exclusion, #7106); `isProjectTrusted()` gates present in installed `resource-loader.js:756,767`. `agent_end`/`willRetry` terminal contract verified live by the consult smoke.
+
+### kb files refreshed in this run
+
+- `sources.md` — pin bumped, catalog-left-the-tree rule recorded, confidence-rule line re-anchored.
+- **Full cite re-anchor** (`gap-scan`, same run): 753 cites audited, 748 re-anchored across 33 skill files.
+- Corrections where the *mechanism* changed — all from `9993c969` "replace model registry with model runtime", which landed in **v0.80.8**, i.e. these were **already dead at the previous pin and the v0.80.9 gap-scan missed them**:
+  - `AuthStorage.getApiKey` **removed** → `ModelRuntime.getAuth` (`model-runtime.ts:374-376`) → `composeApiKeyAuth` (`provider-composer.ts:293`). `auth-storage.ts` is credential storage only.
+  - `ProviderConfigInput` → `provider-composer.ts:44-68`. `ProviderModelConfig` gone → inline element type `:53-67`.
+  - per-model `baseUrl` → `provider-composer.ts:136` (models.json) / `:218` (registerProvider).
+  - `register-builtins.ts` **removed** → `providers/all.ts`, and the lazy rule **inverted** (all.ts statically imports; laziness is now the provider module's `../api/<x>.lazy.ts`).
+  - `provider-display-names.ts` **removed** → display name is the provider definition's `name` field.
+
+### Still stale / flagged
+
+- **`pi-providers/reference/auth-resolution.md` five-step table** — marked ⚠️ STALE / pending re-derivation (low confidence). Its 12 dead `auth-storage.ts:4xx/5xx` cites are knowingly retained under the flag as the record of what needs deriving against the composer chain. **This is the top follow-up.**
+- Carried over from the v0.80.9 entry and NOT addressed here: `pi-rpc` `willRetry` enumeration; `pi-providers` missing Together AI / `compat.forceAdaptiveThinking` / JSONC note; `pi-extensions/loading.md` jiti cites.
+
+### Method note (applies to every future gap-scan)
+
+The first re-anchor pass mapped cites by arithmetic over `git diff -U0` hunk offsets. **That is wrong** across pure-insertion hunks — caught via `extensions/types.ts:673` (`BeforeProviderHeadersEvent`) mapping to `:677` when it actually sits at `:680`. Re-done by matching the old line's exact text in the new file; **297 of 451 arithmetic results needed correcting**. Content matching is the method. Now recorded in `sources.md`.
+
+---
+
 ## 2026-07-16 — pulled to `2d16f929` (v0.80.9)
 
 > Pinned 2026-07-16: runtime npm global upgraded `0.79.10 → 0.80.9` and **verified live** (consult RPC smoke 5.77s clean exit, agent_end terminal, OAuth subscription call + cache_control active). `origin/main` fast-forwarded `8e190066 → v0.80.9` and pushed; `expert/main` rebased onto `v0.80.9` (`.pi/`-only, 9 commits, clean → `c2f14f58`). Citations below are `file:line` against the `v0.80.9` tree (`2d16f929`). Full audit: `x/memory/outputs/2026-07/16/1417 - pi 0.79.10 to 0.80.9 upgrade verdict.md`. Executed under workitem `314abbf8`.
