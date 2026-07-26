@@ -74,7 +74,20 @@ Wired through the `ProviderEnv` parameter that `resolveConfigValue` accepts; see
 
 The `OAuthCredentials` shape (imported from `packages/ai`) carries `accessToken`, `refreshToken`, `expires`, plus optional provider-specific fields (e.g. account ID for github-copilot). On refresh, the entry is rewritten in-place under a file lock (`resolveStoredOAuth` at `packages/ai/src/auth/resolve.ts:93+`, double-checked locking; moved out of `auth-storage.ts` in v0.80.8).
 
-OAuth tokens are populated by the `/login` flow per provider (`/login` resolves to a per-provider OAuth flow in `interactive-mode.ts`). `/logout` clears the entry — see `auth-storage.ts:logout` neighbourhood.
+OAuth tokens are populated by the `/login` flow per provider. `/logout` clears the entry — see `auth-storage.ts:logout` neighbourhood.
+
+### `/login` is interactive — three branches
+
+`handleLoginCommand(providerRef?)` (`interactive-mode.ts:4891-4913`). It is **not** a "you must name a provider" command:
+
+| Invocation | Behavior | Code |
+|---|---|---|
+| `/login` (no argument) | Opens the **auth-type selector** — pick provider + auth flavor from a list. This is the normal path. | `:4893-4896` |
+| `/login <ref>` matching exactly one provider+authType | Goes straight into that login (`startProviderLogin`; OAuth branch at `:4916`). | `:4899-4901` |
+| `/login <ref>` matching several entries that are all the **same** provider id | Opens the auth-type selector scoped to that provider — i.e. "which auth flavor for this provider". | `:4904-4909` |
+| `/login <ref>` matching several **different** providers, or nothing | Falls through to `showLoginProviderSelector(undefined, providerRef)` with the ref as a filter. | `:4912` |
+
+`findLoginProviderOptions(providerRef)` (`:4898`) is what produces the candidate list, and `modelRuntime.getAvailable()` is awaited first (`:4892`) so the selector reflects the live registry.
 
 ## Anthropic OAuth detection — `sk-ant-oat`
 

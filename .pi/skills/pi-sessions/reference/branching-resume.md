@@ -26,7 +26,7 @@ All defined on `SessionManager` (`packages/coding-agent/src/core/session-manager
 | `open(path, sessionDir?, cwdOverride?)` | `:1280-1288` | Reads the file, extracts `cwd` from the header (or accepts `cwdOverride`), uses `dirname(path)` as the implicit `sessionDir` if not supplied. Same file is appended to on subsequent writes. |
 | `continueRecent(cwd, sessionDir?)` | `:1295-1303` | Calls `findMostRecentSession(dir)`; falls back to `create`-like behavior (no `mostRecent`). Same file is reused. |
 | `inMemory(cwd?)` | `:1305-1307` | `sessionFile` is empty string, `persisted: false` (`isPersisted()` returns false). All append* methods stay in memory. |
-| `forkFrom(sourcePath, targetCwd, sessionDir?)` | `:1316-1352` | Reads source, validates header, generates new session id + filename `<iso-ts>_<id>.jsonl`, writes new header with `parentSession: sourcePath` and `cwd: targetCwd`, then copies every non-header entry from source into the new file. Returns a manager pointed at the new file. |
+| `forkFrom(sourcePath, targetCwd, sessionDir?)` | `:1579-1625` | Reads source, validates header, generates new session id + filename `<iso-ts>_<id>.jsonl`, writes new header with `parentSession: sourcePath` and `cwd: targetCwd`, then copies every non-header entry from source into the new file. Returns a manager pointed at the new file. |
 
 `list(cwd, sessionDir?, onProgress?)` and `listAll(onProgress?)` are also static (referenced in the README but defined in the listing section of the file). They produce `SessionInfo[]` for picker UIs.
 

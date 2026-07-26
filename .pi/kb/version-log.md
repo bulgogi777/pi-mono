@@ -40,9 +40,26 @@ Citations: `<sha>` for commit; `<file>:<line>` against the **new pin** (unless o
   - `register-builtins.ts` **removed** → `providers/all.ts`, and the lazy rule **inverted** (all.ts statically imports; laziness is now the provider module's `../api/<x>.lazy.ts`).
   - `provider-display-names.ts` **removed** → display name is the provider definition's `name` field.
 
+### Carried-over flags — CLEARED 2026-07-26
+
+Worked the backlog the v0.80.9 entry deferred. Outcome per item:
+
+| Flag | Verdict |
+|---|---|
+| `pi-rpc` missing `willRetry` | **Already closed** — `protocol.md:123` documents `agent_end{messages, willRetry}` with semantics; `agent_settled` documented at `protocol.md:124` / `json-mode.md:56,62`. Verified against `agent-session.ts:142-146`. No change needed. |
+| `pi-providers` missing Together AI | **Was much worse than flagged.** The `KnownProvider` table claimed **28** providers; the union (`types.ts:34-72`) has **38**. Ten missing: `together`, `nvidia`, `ant-ling`, `radius`, `zai-coding-cn`, `qwen-token-plan{,-cn}`, `xiaomi-token-plan-{ams,cn,sgp}`. All ten added with auth flavor / env var / default model. Inline union list and count corrected; `envMap` cite re-anchored to `env-api-keys.ts:79-114`. |
+| `pi-providers` missing `compat.forceAdaptiveThinking` | **Added** — new subsection in `custom-providers.md` (`types.ts:625`, default false, generator-applied for adaptive families; matters for Anthropic-compatible gateways). Also documented neighbours `allowEmptySignature` `:627`, `supportsStrictTools` `:629`. |
+| `pi-providers` `/login` interactive selection undocumented | **Added** — four-branch table in `auth-resolution.md` from `handleLoginCommand` (`interactive-mode.ts:4891-4913`). Bare `/login` opens the auth-type selector; it never required a provider argument. |
+| `pi-providers` `models.json` not noted as JSONC | **Already closed** — covered in `custom-providers.md`. |
+| `pi-extensions/loading.md` jiti cites | **Was wrong, now fixed** — `loadExtensionModule` cited at `loader.ts:349-361`, which is `setActiveTools`. True location `:403-421`, `jiti.import` `:419`, `createJiti` config `:411-417`, call site `:464`. |
+| `pi-sessions/branching-resume.md` fork session-id | **Was wrong, now fixed** — `forkFrom` cited at `:1316-1352`, actually `session-manager.ts:1579-1625`. Signature gained `options?: NewSessionOptions`; the id is `options.id` (validated `:1603-1604`) **or** `createSessionId()` (`:1606`) — the caller-supplied-id path is the "alignment fix" the flag referred to. |
+
+**Method finding (important):** the two "was wrong" items were *already wrong before* the v0.82.1 re-anchor and survived it. Content-matching maps where the old line **went** — if a cite was wrong to begin with, it stays wrong at a new number. Content-matching fixes *drift*, not *errors*. Detecting errors requires checking that the anchor still says what the prose claims, which only a targeted read can do. Budget for that separately from bulk re-anchoring.
+
 ### Still stale / flagged
 
-- **`pi-providers/reference/auth-resolution.md` five-step table** — marked ⚠️ STALE / pending re-derivation (low confidence). Its 12 dead `auth-storage.ts:4xx/5xx` cites are knowingly retained under the flag as the record of what needs deriving against the composer chain. **This is the top follow-up.**
+- ~~**`pi-providers/reference/auth-resolution.md` five-step table**~~ — **CLEARED**: re-derived 2026-07-26 against `resolveProviderAuth` (`packages/ai/src/auth/resolve.ts:46-77`); found two behavioral errors (models.json outranks env; stored credential short-circuits). See the `67ee4ab0` commit.
+- *(historical, superseded)* `pi-providers/reference/auth-resolution.md` five-step table — marked ⚠️ STALE / pending re-derivation (low confidence). Its 12 dead `auth-storage.ts:4xx/5xx` cites are knowingly retained under the flag as the record of what needs deriving against the composer chain. **This is the top follow-up.**
 - Carried over from the v0.80.9 entry and NOT addressed here: `pi-rpc` `willRetry` enumeration; `pi-providers` missing Together AI / `compat.forceAdaptiveThinking` / JSONC note; `pi-extensions/loading.md` jiti cites.
 
 ### Method note (applies to every future gap-scan)
