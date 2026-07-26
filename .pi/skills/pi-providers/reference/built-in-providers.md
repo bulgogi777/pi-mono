@@ -1,27 +1,31 @@
 # Built-in Providers
 
-Full table of providers pi knows about at HEAD, plus model-selection mechanics. All cites against pi-mono `HEAD` on the date this file was written.
+Full table of providers pi knows about at HEAD, plus model-selection mechanics. All cites against the current pin (`v0.82.1`, `b4f29368`).
 
-## The `KnownProvider` union (28 providers)
+## The `KnownProvider` union (38 providers)
 
-Defined at `packages/ai/src/types.ts:18-50` as a string-literal union of provider IDs. The current set:
+> Count re-verified 2026-07-26 at `v0.82.1` — the union is `packages/ai/src/types.ts:34-72`. It was documented as 28; ten providers had accrued unnoticed (`together`, `nvidia`, `ant-ling`, `radius`, `zai-coding-cn`, `qwen-token-plan{,-cn}`, `xiaomi-token-plan-{ams,cn,sgp}`). Re-count this against the union on every `gap-scan`; it drifts silently.
+
+Defined at `packages/ai/src/types.ts:34-72` as a string-literal union of provider IDs. The current set:
 
 ```
-amazon-bedrock, anthropic, google, google-vertex, openai, azure-openai-responses,
-openai-codex, deepseek, github-copilot, xai, groq, cerebras, openrouter,
-vercel-ai-gateway, zai, mistral, minimax, minimax-cn, moonshotai, moonshotai-cn,
-huggingface, fireworks, opencode, opencode-go, kimi-coding, cloudflare-workers-ai,
-cloudflare-ai-gateway, xiaomi
+amazon-bedrock, ant-ling, anthropic, azure-openai-responses, cerebras,
+cloudflare-ai-gateway, cloudflare-workers-ai, deepseek, fireworks,
+github-copilot, google, google-vertex, groq, huggingface, kimi-coding,
+minimax, minimax-cn, mistral, moonshotai, moonshotai-cn, nvidia, openai,
+openai-codex, opencode, opencode-go, openrouter, qwen-token-plan,
+qwen-token-plan-cn, radius, together, vercel-ai-gateway, xai, xiaomi,
+xiaomi-token-plan-ams, xiaomi-token-plan-cn, xiaomi-token-plan-sgp,
+zai, zai-coding-cn
 ```
 
 `xiaomi` was added in **v0.72.0** (Xiaomi MiMo Token Plan, Anthropic-compatible).
 
-
-`Provider` itself (`types.ts:49`) widens this to `KnownProvider | string` so extensions can register custom IDs (see `pi.registerProvider`).
+`ProviderId` (`types.ts:73`) widens this to `KnownProvider | string` so extensions can register custom IDs (see `pi.registerProvider`).
 
 ## Per-provider auth and env vars
 
-The single source of truth for env-var → provider mapping is `packages/ai/src/env-api-keys.ts:104-120`. The `auth.json` keys mirror the `KnownProvider` IDs verbatim (one entry per provider). Documentation table at `packages/coding-agent/docs/providers.md:48-72`.
+The single source of truth for env-var → provider mapping is the `envMap` in `getApiKeyEnvVars` (`packages/ai/src/env-api-keys.ts:79-114`). The `auth.json` keys mirror the `KnownProvider` IDs verbatim (one entry per provider). Documentation table at `packages/coding-agent/docs/providers.md:48-72`.
 
 | Provider ID (`auth.json` key) | Auth flavor | Primary env var(s) | Default model (HEAD) | Notes |
 |---|---|---|---|---|
@@ -53,6 +57,16 @@ The single source of truth for env-var → provider mapping is `packages/ai/src/
 | `cloudflare-workers-ai` | API key + account | `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID` | `@cf/moonshotai/kimi-k2.6` | Auto-sets `x-session-affinity` for prefix-cache discounts. |
 | `cloudflare-ai-gateway` | API key + account + gateway | `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID` | `workers-ai/@cf/moonshotai/kimi-k2.6` | Routes to OpenAI / Anthropic / Workers AI through one gateway. Auth modes: Workers-AI native, unified billing, stored BYOK, inline BYOK (`docs/providers.md:152-178`). |
 | `xiaomi` | API key | `XIAOMI_API_KEY` | `mimo-v2.5-pro` | **Added v0.72.0.** Xiaomi MiMo Token Plan (Anthropic-compatible endpoint). `/login` display name comes from the provider definition `name` field (`packages/ai/src/providers/xiaomi.ts:9`; `provider-display-names.ts` was removed in v0.80.8). User-facing doc: `docs/providers.md:72-91`. |
+| `together` | API key | `TOGETHER_API_KEY` | `moonshotai/Kimi-K2.6` | Together AI. OpenAI-completions API at `https://api.together.ai/v1` (`providers/together.ts:8-13`). |
+| `nvidia` | API key | `NVIDIA_API_KEY` | `nvidia/nemotron-3-super-120b-a12b` | NVIDIA NIM / integrate.api.nvidia.com. |
+| `ant-ling` | API key | `ANT_LING_API_KEY` | `Ring-2.6-1T` | Ant Group Ling models. |
+| `radius` | **OAuth** | `RADIUS_API_KEY` | `auto` | Gateway provider — OAuth via `loadRadiusOAuth` (`providers/radius.ts:33`), routed through the gateway. Default model `auto` lets the gateway pick. |
+| `zai-coding-cn` | API key | `ZAI_CODING_CN_API_KEY` | `glm-5.1` | Z.ai coding plan, CN region. Companion to `zai` / `zai-coding`. |
+| `qwen-token-plan` | API key | `QWEN_TOKEN_PLAN_API_KEY` | `qwen3.7-max` | Alibaba Qwen token plan. |
+| `qwen-token-plan-cn` | API key | `QWEN_TOKEN_PLAN_CN_API_KEY` | `qwen3.7-max` | CN region of the above. |
+| `xiaomi-token-plan-ams` | API key | `XIAOMI_TOKEN_PLAN_AMS_API_KEY` | `mimo-v2.5-pro` | Xiaomi token plan, Amsterdam region. |
+| `xiaomi-token-plan-cn` | API key | `XIAOMI_TOKEN_PLAN_CN_API_KEY` | `mimo-v2.5-pro` | Xiaomi token plan, CN region. |
+| `xiaomi-token-plan-sgp` | API key | `XIAOMI_TOKEN_PLAN_SGP_API_KEY` | `mimo-v2.5-pro` | Xiaomi token plan, Singapore region. |
 
 Default-model map source: `packages/coding-agent/src/core/model-resolver.ts:14-54` (`defaultModelPerProvider`).
 
