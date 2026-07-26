@@ -4,6 +4,10 @@
 
 > Tracked on `expert/main` via `git add -f` — upstream's `.gitignore:22` blanket-ignores `.claude/`.
 
+> **This file is NOT the expert context, and pi never loads it.** The expert context is `.pi/` — that is what `consult-pi-mono` / pi RPC reads. pi's `loadProjectContextFiles` (`resource-loader.ts:105-118`) walks **ancestors only, never child dirs**, so `.claude/` is out of scope; and per-directory it takes `AGENTS.md` before `CLAUDE.md` and stops at the first hit (`:68`), so upstream's root `AGENTS.md` would shadow a root-level `CLAUDE.md` anyway. This file exists for **Claude Code sessions with cwd here** — the surface `.pi/` does not protect.
+>
+> Keep repo-note content in `.claude/`, never at repo root: if upstream ever dropped `AGENTS.md`, a root `CLAUDE.md` *would* land in pi's system prompt, and self-identifying text there is what trips Anthropic's third-party-app classification (Max subscription → extra-usage billing).
+
 ---
 
 ## What this repo is
