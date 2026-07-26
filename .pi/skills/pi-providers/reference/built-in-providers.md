@@ -88,7 +88,7 @@ Comma-separated list of patterns. Same glob semantics per pattern. Resolved by `
 
 ### `--api-key`
 
-Single value, applies to whatever provider is in scope. Stored as runtime override at top priority (`auth-storage.ts:457-460`).
+Single value, applies to whatever provider is in scope. Stored as runtime override at top priority (`packages/ai/src/auth/resolve.ts:54-60`).
 
 ### `--provider`
 
