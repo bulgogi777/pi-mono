@@ -79,7 +79,7 @@ For programmatic embedding, `loadExtensionFromFactory(factory, cwd, eventBus, ru
 For each path, `loadExtension`:
 
 1. `resolvePath(extensionPath, cwd)` — absolute-path normalization (`loader.ts:400`).
-2. `loadExtensionModule(resolvedPath)` (`loader.ts:349-361`) — uses `jiti` to load TS/JS without a build step. In bun-binary mode it uses `virtualModules`; in Node/dev it uses path aliases via `getAliases()`.
+2. `loadExtensionModule(extensionPath, cacheToken?)` (`loader.ts:403-421`; called at `:464`) — uses `jiti` to load TS/JS without a build step. In bun-binary mode it uses `virtualModules`; in Node/dev it uses path aliases via `getAliases()`.
 3. The module's default export must be a function (the factory) — anything else is rejected with `"Extension does not export a valid factory function"` (`loader.ts:402-404`).
 4. `createExtension(...)` builds an empty `Extension` object with `path`, `resolvedPath`, `sourceInfo`, and empty `Map`s for handlers / tools / message renderers / commands / flags / shortcuts (`loader.ts:355-389`).
 5. `createExtensionAPI(extension, runtime, cwd, eventBus)` builds the `pi` object the factory will see (`loader.ts:~395`).
@@ -95,7 +95,7 @@ The resource loader knows that paths under `~/.pi/agent/extensions/` are scope `
 ## Common gotchas
 
 - **TypeScript imports**: handled by `jiti` — no separate compile step. But `jiti` won't help with native modules; if your extension depends on a native dep, you may need to bundle.
-- **Inline import dynamic gotcha**: extensions are loaded via `jiti.import(extensionPath, { default: true })`. Make sure your extension uses a default export (`export default function (pi) {...}`).
+- **Inline import dynamic gotcha**: extensions are loaded via `jiti.import(extensionPath, { default: true })` (`loader.ts:419`; the `createJiti` config is `:411-417`). Make sure your extension uses a default export (`export default function (pi) {...}`).
 - **Loose-directory loads always run**: there's no opt-out at the directory level. To selectively disable an extension, either delete/move its file, use `--no-extensions`, or the runtime extensions UI.
 - **Project shadowing**: a project extension with the same path as a global one wins (the global is dedup'd out at `loader.ts:578-585`). But a project extension and a global extension with **different file names** both load — there's no name-based dedup.
 - **`package.json` manifest paths**: silently filtered against `existsSync` (`loader.ts:503`). A typo in the manifest disappears with no warning. Verify with `ls`.

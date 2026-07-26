@@ -131,6 +131,14 @@ Some OpenAI-compatible servers don't understand `developer` role messages or `re
 
 When set at provider level, applies to all models in that provider. Per-model overrides win.
 
+### `compat.forceAdaptiveThinking` (Anthropic-compatible endpoints)
+
+`forceAdaptiveThinking?: boolean` (`packages/ai/src/types.ts:625`, default `false`). Anthropic-compatible providers set it to `true` for any model whose upstream **requires** the adaptive thinking format; set it to `false` to opt out on an overridden built-in model.
+
+You rarely set this by hand for first-party Anthropic models — the catalog generator applies it automatically for adaptive-thinking families (`packages/ai/scripts/generate-models.ts`, the `isAnthropicAdaptiveThinkingModel` list). `claude-opus-5` ships with `forceAdaptiveThinking: true`, `supportsTemperature: false`, `thinkingLevelMap {xhigh, max}`. It matters when you point a custom provider at an Anthropic-compatible gateway (Xiaomi MiMo, a BYOK proxy): if the upstream expects the adaptive format and the model entry doesn't declare it, thinking requests fail or silently degrade.
+
+Neighbouring compat flags on the same type: `allowEmptySignature` (`:627` — replay empty thinking signatures as `signature: ""` rather than converting thinking to text) and `supportsStrictTools` (`:629` — Anthropic strict tool schemas; generated Anthropic models enable it explicitly).
+
 ### Overriding built-in providers
 
 To redirect the built-in `anthropic` provider through a corporate proxy:
