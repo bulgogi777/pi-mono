@@ -62,7 +62,7 @@ The same syntax works in `~/.pi/agent/settings.json`'s `enabledModels` field —
 
 ## `--api-key <value>` — runtime override
 
-Sets the runtime override at the highest priority in the resolution chain (`auth-storage.ts:457-460`). Overrides `auth.json` and env vars for the chosen provider.
+Sets the runtime override at the highest priority in the resolution chain (`packages/ai/src/auth/resolve.ts:54-60`). Overrides `auth.json` and env vars for the chosen provider.
 
 Process-lifetime only — not persisted. To store a key, use `/login` interactively or edit `auth.json` directly (see `reference/auth-resolution.md` for the file format).
 
@@ -88,7 +88,7 @@ Exits without starting a session. Useful for scripting (`pi --list-models gpt-5 
 
 ## Interaction with auth resolution
 
-Once provider and model are selected, pi resolves a credential via `ModelRuntime.getAuth(providerId)` (`model-runtime.ts:374-376`) → `composeApiKeyAuth` (`provider-composer.ts:293`). (`AuthStorage.getApiKey` was removed in v0.80.8, `9993c969`.) Order, pending re-derivation:
+Once provider and model are selected, pi resolves a credential via `ModelRuntime.getAuth(providerId)` (`model-runtime.ts:374-376`) → `composeApiKeyAuth` (`provider-composer.ts:293`). (`AuthStorage.getApiKey` was removed in v0.80.8, `9993c969`.) Order — re-derived at v0.82.1, see `reference/auth-resolution.md`:
 
 1. Runtime override from `--api-key` (`:457-460`)
 2. `auth.json` `api_key` entry (`:464-466`)

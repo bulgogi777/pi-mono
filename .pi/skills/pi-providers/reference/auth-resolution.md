@@ -2,27 +2,27 @@
 
 How pi resolves credentials for a given provider, what `~/.pi/agent/auth.json` contains, and the OAuth-vs-API-key billing distinction (especially for Anthropic). All cites against the current pin (`v0.82.1`, `b4f29368`).
 
-## The five-step resolution order
+## The resolution order
 
-> ⚠️ **STALE — pending re-derivation (confidence: low).** The table below described `AuthStorage.getApiKey(providerId, options?)`, which **no longer exists**. The `9993c969` "replace model registry with model runtime" refactor (landed **v0.80.8**, so this was already dead at the previous `v0.80.9` pin — missed by that gap-scan) moved auth resolution out of `AuthStorage` entirely. Every `auth-storage.ts:4xx/5xx` cite in the table is dead: the file is now 271 lines and holds **credential storage only** (`AuthStorage` class at `auth-storage.ts:171` — `read` `:217`, `modify` `:224`, `delete` `:242`, `list` `:252`, with `resolveConfigValue` expansion at `:221`).
->
-> **Verified new entry points** (confidence: high):
-> - `ModelRuntime.getAuth(providerId | model, overrides?)` — `packages/coding-agent/src/core/model-runtime.ts:374-376`. The runtime-level resolver.
-> - `composeApiKeyAuth(...)` — `packages/coding-agent/src/core/provider-composer.ts:293`. Composes the per-provider API-key chain: stored credential → configured API key (`resolveConfigValueOrThrow` at `:343`) → `inherited` provider default (env vars). `composeOAuthAuth` at `:359` handles the OAuth branch.
-> - `ModelRegistry.getApiKeyForProvider(provider)` — `packages/coding-agent/src/core/model-registry.ts:107-113`, now a thin delegate to `runtime.getAuth(provider)`.
-> - Env-var lookup: `getEnvApiKey` — `packages/ai/src/env-api-keys.ts:143`.
->
-> The *precedence outcome* below is probably still broadly right (runtime override → `auth.json` → env → `models.json`), but it has **not** been re-derived against the composer chain — do not cite the line numbers in the table until it has.
+Re-derived 2026-07-26 against `v0.82.1` (confidence: **high** — traced end-to-end through the live call path, not inferred). Replaces the pre-v0.80.8 `AuthStorage.getApiKey` description; that function was deleted by `9993c969` and `auth-storage.ts` is now credential **storage** only (`AuthStorage` at `:171` — `read` `:217`, `modify` `:224`, `delete` `:242`, `list` `:252`).
+
+**Call path:** `ModelRuntime.getAuth` (`model-runtime.ts:376-397`) → `Models.getAuth` (`packages/ai/src/models.ts`) → **`resolveProviderAuth`** (`packages/ai/src/auth/resolve.ts:46-77`) — *this is the authoritative resolver*. For providers configured via `models.json`/extensions, the provider's own `auth.apiKey` has been wrapped by `composeApiKeyAuth` (`provider-composer.ts:293`, resolve body `:333-354`), which inserts the configured key into the chain.
 
 | # | Source | Code | Notes |
 |---|---|---|---|
-| 1 | **Runtime override** (`--api-key` CLI flag, `pi.setApiKey` from extensions) | `auth-storage.ts:474-477` (`runtimeOverrides` map declared at `:201`, populated by `setRuntimeApiKey` at `:230-232`) | In-memory only, lives for the process. CLI flag wires here via `args.ts` → `main.ts`. |
-| 2 | **`auth.json` API-key entry** | `auth-storage.ts:482-484` | Calls `resolveConfigValue(cred.key, cred.env)` (`:483`) — supports `!shell-command`, env-var-name lookup, or literal value. The optional `cred.env` is the per-credential env scope added in 0.79.5 (see "Provider-scoped env overrides" below). |
-| 3 | **`auth.json` OAuth entry** | `auth-storage.ts:486-522` | Auto-refreshes if `Date.now() >= cred.expires` (`:494`) using a file lock (`refreshOAuthTokenWithLock` at `:418-462`). On refresh failure, re-reads the file in case another instance won the lock; otherwise returns `undefined` so model discovery skips this provider rather than erroring. |
-| 4 | **Environment variable** (via `getEnvApiKey`) | `auth-storage.ts:524-525` → `packages/ai/src/env-api-keys.ts:143-`(function body) | The env-var name is per-provider; see `reference/built-in-providers.md` and `getApiKeyEnvVars` at `env-api-keys.ts:68-117`. |
-| 5 | **Custom resolver** (`models.json` provider keys) | `auth-storage.ts:528-531` | Behind `options?.includeFallback !== false` so model discovery can opt out. The `fallbackResolver` is wired up by the model registry. |
+| 1 | **Per-request override** (`options.apiKey`, `--api-key`) | `resolve.ts:54-60` | Short-circuits everything; builds a synthetic `api_key` credential from the override, carrying `overrides.env`. |
+| 2 | **Runtime in-memory key** (`pi.setApiKey` from extensions) | `runtime-credentials.ts:24-27` | `RuntimeCredentials` is a `CredentialStore` **overlay**: `read()` returns the in-memory override if present, else delegates to `AuthStorage`. So runtime keys enter as a "stored credential" ranked above `auth.json`. Process-lifetime only. |
+| 3 | **`auth.json` credential** | `resolve.ts:62-72` | `type: "oauth"` → `resolveStoredOAuth` (`:93`) with **double-checked locking**: valid tokens take no lock; expired ones lock, re-check expiry, refresh once globally, persist the rotation. `type: "api_key"` → `resolveApiKey` with `overrides.env` merged over the credential's own `env` (`:66`). |
+| 4 | **`models.json` / extension-configured `apiKey`** | `provider-composer.ts:341-346` | Expanded by `resolveConfigValueOrThrow` (`:343`) — `!shell-command`, `$ENV_VAR`, or literal. Reported as `source: "configured API key"`. |
+| 5 | **Ambient** (env vars, AWS profiles, ADC files) | `resolve.ts:74-77` → provider's own `apiKey.resolve` | Reached only when there is **no** stored credential. Per-provider env names via `getApiKeyEnvVars`; for `anthropic` the order is `ANTHROPIC_AUTH_TOKEN` → `ANTHROPIC_OAUTH_TOKEN` → `ANTHROPIC_API_KEY` (`packages/ai/src/env-api-keys.ts:76`). |
 
-The `packages/coding-agent/docs/providers.md` doc summarizes this as a four-step list (CLI → auth.json → env → models.json) — accurate in spirit, but it flattens steps 2 and 3 (api_key vs oauth inside `auth.json`) into one. Both file entries are checked at the same priority level; the entry's `type` field decides which branch runs.
+### Two corrections vs. the pre-v0.80.8 description
+
+1. **`models.json` outranks environment variables** — they were listed the other way round (env at #4, models.json as a last-resort "fallback" at #5). In `composeApiKeyAuth`, a configured `rawKey` is consumed *before* delegating to `inherited` (the built-in provider's env-var resolution): configured-key branch `:341-346`, env branch `:347-348`. The old `options.includeFallback` flag no longer exists.
+
+2. **A stored credential SHORT-CIRCUITS — it never falls through to env.** `resolve.ts:62-72`: if `credentials.read()` returns anything, that branch decides the outcome, and if the stored type has no matching provider method the function **`return undefined` (`:71`)** rather than trying ambient auth. Practical consequence: a stale or wrong-type entry in `auth.json` makes the provider look *unconfigured* even when a perfectly good `ANTHROPIC_API_KEY` is exported. When debugging "pi says the provider isn't configured but my env var is set", check `auth.json` **first** — deleting the entry (or `/logout`) is what restores env-var resolution.
+
+`packages/coding-agent/docs/providers.md` still summarizes this as CLI → auth.json → env → models.json. That ordering is **wrong on the last two** — trust the table above.
 
 ## auth.json shape
 
@@ -42,7 +42,7 @@ The `env?: Record<string, string>` on `ApiKeyCredential` is the provider-scoped 
 
 ### ApiKeyCredential — the `key` field
 
-The `key` string is run through `resolveConfigValue` (defined in `core/resolve-config-value.ts`, called at `auth-storage.ts:483` as `resolveConfigValue(cred.key, cred.env)`). The supported formats:
+The `key` string is run through `resolveConfigValue` (defined in `core/resolve-config-value.ts`, called at `auth-storage.ts:221` as `resolveConfigValue(credential.key, credential.env)`). The supported formats:
 
 - **Shell command**: leading `!` — pi runs the command, captures stdout, caches the result for the lifetime of the process. Useful for `!security find-generic-password -ws 'anthropic'`, `!op read 'op://vault/item/credential'`, etc.
 - **Env-var indirection**: an explicit `$ENV_VAR` or `${ENV_VAR}` reference — expanded against `cred.env` first, then `process.env`. (Note: 0.79.4 made plain uppercase strings literals — use the `$` prefix for env-var indirection. See `providers.md` "Key Resolution".)
@@ -72,7 +72,7 @@ Wired through the `ProviderEnv` parameter that `resolveConfigValue` accepts; see
 
 ### OAuthCredential — what's in there
 
-The `OAuthCredentials` shape (imported from `packages/ai`) carries `accessToken`, `refreshToken`, `expires`, plus optional provider-specific fields (e.g. account ID for github-copilot). On refresh, the entry is rewritten in-place under a file lock (`refreshOAuthTokenWithLock` at `auth-storage.ts:418-462`).
+The `OAuthCredentials` shape (imported from `packages/ai`) carries `accessToken`, `refreshToken`, `expires`, plus optional provider-specific fields (e.g. account ID for github-copilot). On refresh, the entry is rewritten in-place under a file lock (`resolveStoredOAuth` at `packages/ai/src/auth/resolve.ts:93+`, double-checked locking; moved out of `auth-storage.ts` in v0.80.8).
 
 OAuth tokens are populated by the `/login` flow per provider (`/login` resolves to a per-provider OAuth flow in `interactive-mode.ts`). `/logout` clears the entry — see `auth-storage.ts:logout` neighbourhood.
 
@@ -126,11 +126,11 @@ You're hitting the third-party-app extra-usage cap, not your Pro/Max plan. The w
 
 ### "Why does my `--api-key` flag not seem to take effect?"
 
-It does — but only at priority 1 (`auth-storage.ts:474-477`). Verify it's actually being parsed (see `args.ts`). If you're using `RpcClient` from a host program, pass `apiKey` through `RpcClientOptions` (which becomes `--api-key` on the spawned subprocess) — see **pi-rpc**.
+It does — but only at priority 1 (`packages/ai/src/auth/resolve.ts:54-60` for `options.apiKey`; `runtime-credentials.ts:24-27` for `pi.setApiKey`). Verify it's actually being parsed (see `args.ts`). If you're using `RpcClient` from a host program, pass `apiKey` through `RpcClientOptions` (which becomes `--api-key` on the spawned subprocess) — see **pi-rpc**.
 
 ### "How do I make `auth.json` read my key from 1Password / keychain?"
 
-Use the shell-command form: `{ "type": "api_key", "key": "!op read 'op://vault/item/credential'" }`. The `!`-prefix triggers shell execution at `auth-storage.ts:483` via `resolveConfigValue`. Result is cached for the process lifetime.
+Use the shell-command form: `{ "type": "api_key", "key": "!op read 'op://vault/item/credential'" }`. The `!`-prefix triggers shell execution at `auth-storage.ts:221` via `resolveConfigValue`. Result is cached for the process lifetime.
 
 ## Cross-references
 
