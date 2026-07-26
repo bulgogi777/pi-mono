@@ -11,11 +11,11 @@ pi.registerProvider(name: string, config: ProviderConfig): void;
 pi.unregisterProvider(name: string): void;
 ```
 
-`registerProvider` at `types.ts:1255-1292` (with three full inline examples in the JSDoc above the signature). `unregisterProvider` at `types.ts:1295-1307`.
+`registerProvider` at `types.ts:1269-1306` (with three full inline examples in the JSDoc above the signature). `unregisterProvider` at `types.ts:1308-1320`.
 
 ## ProviderConfig — three operating modes
 
-The shape is `ProviderConfig` at `types.ts:1318-1357`. Which fields you set determines the behavior:
+The shape is `ProviderConfig` at `types.ts:1332-1371`. Which fields you set determines the behavior:
 
 | Mode | Fields set | What happens |
 |---|---|---|
@@ -24,7 +24,7 @@ The shape is `ProviderConfig` at `types.ts:1318-1357`. Which fields you set dete
 | **OAuth registration** | `oauth` block | Plugs into the `/login` UI. Combine with `models` for a full custom provider, or `baseUrl` to add OAuth to a built-in. |
 | **Custom transport** | `streamSimple` | Bypasses pi-ai's built-in providers entirely; the extension ships its own `(model, context, options) => AssistantMessageEventStream` implementation. |
 
-Field reference (`types.ts:1318-1357`):
+Field reference (`types.ts:1332-1371`):
 
 | Field | Type | Required when | Notes |
 |---|---|---|---|
@@ -38,11 +38,11 @@ Field reference (`types.ts:1318-1357`):
 | `models` | `ProviderModelConfig[]?` | Optional | If set, replaces all models for the provider. |
 | `oauth` | `{ name, login, refreshToken, getApiKey, modifyModels? }` | Optional | Plugs into `/login`. See OAuth subsection below. |
 
-`ProviderModelConfig` (`types.ts:1359-…`) carries `id`, `name`, optional `api` override, `baseUrl` (per-model override; **honored as of v0.72.0** — see `model-registry.ts:886`), `reasoning`, `thinkingLevelMap` (added v0.72.0; replaces removed `compat.reasoningEffortMap`), `input` modalities, `cost`, `contextWindow`, `maxTokens`, etc. — same shape as built-in model definitions. For the migration from `reasoningEffortMap`, see **pi-providers** `reference/custom-providers.md`.
+The model-entry type (formerly `ProviderModelConfig`; that named type no longer exists — it is now the inline element type of `ProviderConfigInput["models"]` at `packages/coding-agent/src/core/provider-composer.ts:53-67`, per `9993c969`/v0.80.8) carries `id`, `name`, optional `api` override, `baseUrl` (per-model override; **honored as of v0.72.0** — now `provider-composer.ts:136` for `models.json` and `:218` for `registerProvider`), `reasoning`, `thinkingLevelMap` (added v0.72.0; replaces removed `compat.reasoningEffortMap`), `input` modalities, `cost`, `contextWindow`, `maxTokens`, etc. — same shape as built-in model definitions. For the migration from `reasoningEffortMap`, see **pi-providers** `reference/custom-providers.md`.
 
 ## OAuth provider contract
 
-When `config.oauth` is set, pi adds the provider to the `/login` flow. Contract (`types.ts:1342-1355`):
+When `config.oauth` is set, pi adds the provider to the `/login` flow. Contract (`types.ts:1355-1368`):
 
 ```ts
 oauth?: {
@@ -60,11 +60,11 @@ The `id` field on `oauth` is set automatically from the registration `name`.
 
 ## Timing — when registration takes effect
 
-JSDoc at `types.ts:1248-1252`:
+JSDoc at `types.ts:1262-1266`:
 
 > During initial extension load this call is **queued** and applied once the runner has bound its context. After that it takes effect immediately, so it is safe to call from command handlers or event callbacks without requiring a `/reload`.
 
-Concretely: a `registerProvider` call from the factory function runs before the runner exists, so it's parked in `pendingProviderRegistrations` (`types.ts:1449`) and replayed during runner binding. A `registerProvider` call from inside a hook handler or command handler executes immediately against the live registry.
+Concretely: a `registerProvider` call from the factory function runs before the runner exists, so it's parked in `pendingProviderRegistrations` (`types.ts:1463`) and replayed during runner binding. A `registerProvider` call from inside a hook handler or command handler executes immediately against the live registry.
 
 ## Worked examples
 
@@ -100,7 +100,7 @@ Once registered, pi resolves the API key for the custom provider via the same fi
 1. Runtime override (`--api-key`, `pi.setApiKey`)
 2. `auth.json` `api_key` entry
 3. `auth.json` `oauth` entry (with auto-refresh)
-4. Environment variable (resolved via `env-api-keys.ts:101-130` — but custom providers aren't in that map; they fall through to step 5)
+4. Environment variable (resolved via `env-api-keys.ts:108-120` — but custom providers aren't in that map; they fall through to step 5)
 5. **Custom resolver** — `models.json` provider keys, plus the `apiKey` field from `ProviderConfig`
 
 The fifth step is how `apiKey: "MY_VAR"` in `ProviderConfig` actually wires up: `resolveConfigValue` (in `core/resolve-config-value.ts`) interprets the string as either `!shell-command`, an env-var name, or a literal — same rules as `auth.json`.

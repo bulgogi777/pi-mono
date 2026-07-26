@@ -4,7 +4,7 @@ Full table of providers pi knows about at HEAD, plus model-selection mechanics. 
 
 ## The `KnownProvider` union (28 providers)
 
-Defined at `packages/ai/src/types.ts:18-46` as a string-literal union of provider IDs. The current set:
+Defined at `packages/ai/src/types.ts:18-50` as a string-literal union of provider IDs. The current set:
 
 ```
 amazon-bedrock, anthropic, google, google-vertex, openai, azure-openai-responses,
@@ -17,11 +17,11 @@ cloudflare-ai-gateway, xiaomi
 `xiaomi` was added in **v0.72.0** (Xiaomi MiMo Token Plan, Anthropic-compatible).
 
 
-`Provider` itself (`types.ts:46`) widens this to `KnownProvider | string` so extensions can register custom IDs (see `pi.registerProvider`).
+`Provider` itself (`types.ts:49`) widens this to `KnownProvider | string` so extensions can register custom IDs (see `pi.registerProvider`).
 
 ## Per-provider auth and env vars
 
-The single source of truth for env-var → provider mapping is `packages/ai/src/env-api-keys.ts:97-130`. The `auth.json` keys mirror the `KnownProvider` IDs verbatim (one entry per provider). Documentation table at `packages/coding-agent/docs/providers.md:48-72`.
+The single source of truth for env-var → provider mapping is `packages/ai/src/env-api-keys.ts:104-120`. The `auth.json` keys mirror the `KnownProvider` IDs verbatim (one entry per provider). Documentation table at `packages/coding-agent/docs/providers.md:48-72`.
 
 | Provider ID (`auth.json` key) | Auth flavor | Primary env var(s) | Default model (HEAD) | Notes |
 |---|---|---|---|---|
@@ -52,9 +52,9 @@ The single source of truth for env-var → provider mapping is `packages/ai/src/
 | `kimi-coding` | API key | `KIMI_API_KEY` | `kimi-for-coding` | |
 | `cloudflare-workers-ai` | API key + account | `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID` | `@cf/moonshotai/kimi-k2.6` | Auto-sets `x-session-affinity` for prefix-cache discounts. |
 | `cloudflare-ai-gateway` | API key + account + gateway | `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID` | `workers-ai/@cf/moonshotai/kimi-k2.6` | Routes to OpenAI / Anthropic / Workers AI through one gateway. Auth modes: Workers-AI native, unified billing, stored BYOK, inline BYOK (`docs/providers.md:152-178`). |
-| `xiaomi` | API key | `XIAOMI_API_KEY` | `mimo-v2.5-pro` | **Added v0.72.0.** Xiaomi MiMo Token Plan (Anthropic-compatible endpoint). `/login` display name `"Xiaomi MiMo Token Plan"` (`provider-display-names.ts:27`). User-facing doc: `docs/providers.md:72-91`. |
+| `xiaomi` | API key | `XIAOMI_API_KEY` | `mimo-v2.5-pro` | **Added v0.72.0.** Xiaomi MiMo Token Plan (Anthropic-compatible endpoint). `/login` display name comes from the provider definition `name` field (`packages/ai/src/providers/xiaomi.ts:9`; `provider-display-names.ts` was removed in v0.80.8). User-facing doc: `docs/providers.md:72-91`. |
 
-Default-model map source: `packages/coding-agent/src/core/model-resolver.ts:14-51` (`defaultModelPerProvider`).
+Default-model map source: `packages/coding-agent/src/core/model-resolver.ts:14-54` (`defaultModelPerProvider`).
 
 A few extras visible in env-api-keys.ts but **not in the `KnownProvider` union** because they're test/auxiliary:
 
@@ -72,7 +72,7 @@ A few extras visible in env-api-keys.ts but **not in the `KnownProvider` union**
 
 ### `--model <pattern>` — single-target, glob-aware
 
-Resolved by `resolveCliModel` (`packages/coding-agent/src/core/model-resolver.ts:332-…`) which delegates to `resolveModelScope` for glob patterns (`:250-308`). Behavior:
+Resolved by `resolveCliModel` (`packages/coding-agent/src/core/model-resolver.ts:353-…`) which delegates to `resolveModelScope` for glob patterns (`:250-308`). Behavior:
 
 - **Exact match**: `--model claude-sonnet-4-5` or `--model anthropic/claude-sonnet-4-5`. Match goes through `findExactModelReferenceMatch` (`:68-…`).
 - **Provider-scoped**: `--model anthropic/claude-sonnet-4-5` filters to that provider only.
@@ -80,11 +80,11 @@ Resolved by `resolveCliModel` (`packages/coding-agent/src/core/model-resolver.ts
   - Case-insensitive.
   - Pattern is matched against both the bare model `id` AND the `provider/id` form (`:274`).
   - Example: `--model "claude-*-sonnet-*"` resolves any matching Anthropic Sonnet variant.
-- **Thinking-level suffix**: append `:high` (or any `ThinkingLevel` from `packages/ai/src/types.ts`) to lock thinking. `model-resolver.ts:266` strips the suffix before glob-matching, then re-applies it.
+- **Thinking-level suffix**: append `:high` (or any `ThinkingLevel` from `packages/ai/src/types.ts`) to lock thinking. `model-resolver.ts:269` strips the suffix before glob-matching, then re-applies it.
 
 ### `--models <pattern,...>` — Ctrl+P cycle list
 
-Comma-separated list of patterns. Same glob semantics per pattern. Resolved by `resolveModelScope` at `model-resolver.ts:250-308` returning `ScopedModel[]` (`:44-47`). Stored on the session for cycling via `cycle_model` (RPC) or Ctrl+P (TUI).
+Comma-separated list of patterns. Same glob semantics per pattern. Resolved by `resolveModelScope` at `model-resolver.ts:252-324` returning `ScopedModel[]` (`:44-47`). Stored on the session for cycling via `cycle_model` (RPC) or Ctrl+P (TUI).
 
 ### `--api-key`
 

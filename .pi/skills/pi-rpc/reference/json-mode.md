@@ -8,7 +8,7 @@ The legacy / lighter-weight sibling of `--mode rpc`. One-shot: pi takes the prom
 pi --mode json "Your prompt here"
 ```
 
-`--mode` is parsed at `packages/coding-agent/src/cli/args.ts:74-78`; valid values are `"text" | "json" | "rpc"` (`args.ts:10`). When `json`, `main.ts:102-103` selects the `"json"` app mode, which routes to `print-mode.ts` with `mode: "json"` (`main.ts:112`).
+`--mode` is parsed at `packages/coding-agent/src/cli/args.ts:74-78`; valid values are `"text" | "json" | "rpc"` (`args.ts:10`). When `json`, `main.ts:103-104` selects the `"json"` app mode, which routes to `print-mode.ts` with `mode: "json"` (`main.ts:113`).
 
 The implementation lives in `packages/coding-agent/src/modes/print-mode.ts` — the same module that also handles `--mode text`. The split is decided by the `mode` field on `PrintModeOptions` (`print-mode.ts:18-19`):
 
@@ -56,9 +56,9 @@ So the output stream is:
 {"type":"agent_settled"}
 ```
 
-The events are exactly the `AgentSessionEvent` union (`packages/coding-agent/src/core/agent-session.ts:136-162`):
+The events are exactly the `AgentSessionEvent` union (`packages/coding-agent/src/core/agent-session.ts:139-181`):
 
-- `AgentEvent` base: `agent_start`, `agent_end`, `turn_start`, `turn_end`, `message_start`, `message_update`, `message_end`, `tool_execution_start`, `tool_execution_update`, `tool_execution_end`. Note the pi override of `agent_end` adds `willRetry: boolean` (`agent-session.ts:139-142`).
+- `AgentEvent` base: `agent_start`, `agent_end`, `turn_start`, `turn_end`, `message_start`, `message_update`, `message_end`, `tool_execution_start`, `tool_execution_update`, `tool_execution_end`. Note the pi override of `agent_end` adds `willRetry: boolean` (`agent-session.ts:142-145`).
 - pi-coding-agent additions: `agent_settled` (**new in 0.80.x** — the true end-of-run signal, emitted after the final `agent_end`), `queue_update`, `compaction_start`, `compaction_end`, `auto_retry_start`, `auto_retry_end`, `entry_appended`, `session_info_changed`, `thinking_level_changed`.
 
 Same set as RPC mode. The wire format per event is identical to RPC's events (which is documented in `reference/protocol.md`).
@@ -113,7 +113,7 @@ Hosts consuming `--mode json` should be ready for these auxiliary events and not
 ## Cross-references
 
 - Full event-stream catalog (the same events `--mode json` and `--mode rpc` emit): `reference/protocol.md` "Event stream" section.
-- The `AgentSessionEvent` union definition: `packages/coding-agent/src/core/agent-session.ts:136-162`.
+- The `AgentSessionEvent` union definition: `packages/coding-agent/src/core/agent-session.ts:139-181`.
 - The `print-mode.ts` `text` vs `json` split: `packages/coding-agent/src/modes/print-mode.ts:18-19`.
 - For the RPC command channel and full bidirectional protocol: `reference/protocol.md`.
 - For embedding strategy comparison (in-process vs subprocess): `reference/sdk-embedding.md`.

@@ -1,6 +1,6 @@
 # Known Issues
 
-Bugs and behavioral surprises in pi's system-prompt assembly path. All cites against the current pin (`v0.80.9`, `2d16f929`). Issues are listed with: symptom, root cause, workaround, and source pointers. When known, version markers track when an issue was first observed.
+Bugs and behavioral surprises in pi's system-prompt assembly path. All cites against the current pin (`v0.82.1`, `b4f29368`). Issues are listed with: symptom, root cause, workaround, and source pointers. When known, version markers track when an issue was first observed.
 
 ## Empty turns through `RpcClient` on the default-prompt branch (observed 0.71.1)
 
@@ -50,7 +50,7 @@ Or supply a `SYSTEM.md` at one of the auto-discovery paths:
 - `<cwd>/.pi/SYSTEM.md` (project, wins)
 - `~/.pi/agent/SYSTEM.md` (global)
 
-See `discoverSystemPromptFile` at `resource-loader.ts:963-974` for the discovery order. **Trust-gating caveat (0.79.x):** the project `<cwd>/.pi/SYSTEM.md` path is gated by `isProjectTrusted()` (`:965`); in headless RPC without `--approve` or a saved trust decision, only the ungated global `~/.pi/agent/SYSTEM.md` (`:969-971`) loads. Trust resolution chain lives in **pi-architecture**.
+See `discoverSystemPromptFile` at `resource-loader.ts:967-964` for the discovery order. **Trust-gating caveat (0.79.x):** the project `<cwd>/.pi/SYSTEM.md` path is gated by `isProjectTrusted()` (`:965`); in headless RPC without `--approve` or a saved trust decision, only the ungated global `~/.pi/agent/SYSTEM.md` (`:969-971`) loads. Trust resolution chain lives in **pi-architecture**.
 
 ### Status
 
@@ -60,7 +60,7 @@ Open as of 0.71.1. The default-prompt branch should arguably degrade more gracef
 
 Pre-0.75.0, both branches emitted a Markdown `# Project Context` block with `## <absolute-path>` per file. PRs #4541 (`7577d3b8`) and #4709 (`aad8cf66`) changed both branches to wrap context in `<project_context>` / `<project_instructions path="...">` XML tags so models stop ingesting prompt content past the boundary when an AGENTS.md itself contains Markdown headings.
 
-Current shape (both branches, at the current pin `v0.80.9` / `2d16f929`):
+Current shape (both branches, at the current pin `v0.82.1` / `b4f29368`):
 
 ```
 \n\n<project_context>\n\n
@@ -102,7 +102,7 @@ Pre-0.80.x: the first request after midnight local time produced a full `cacheWr
 
 ### Cause (historical)
 
-`buildSystemPrompt` used to append `\nCurrent date: YYYY-MM-DD` as the very last system-prompt line before `\nCurrent working directory:`. When `YYYY-MM-DD` rolled over, the system-prompt text changed, and Anthropic cache breakpoint #1b (now `api/anthropic-messages.ts:978`) or #2 (`:969` in OAuth mode) invalidated.
+`buildSystemPrompt` used to append `\nCurrent date: YYYY-MM-DD` as the very last system-prompt line before `\nCurrent working directory:`. When `YYYY-MM-DD` rolled over, the system-prompt text changed, and Anthropic cache breakpoint #1b (now `api/anthropic-messages.ts:979`) or #2 (`:969` in OAuth mode) invalidated.
 
 ### Status
 
