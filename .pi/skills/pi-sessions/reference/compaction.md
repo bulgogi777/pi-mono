@@ -4,7 +4,7 @@ Compaction shrinks the messages-the-LLM-sees by replacing the older portion of t
 
 ## What gets stored on disk
 
-A `CompactionEntry` (see **pi-sessions** `reference/jsonl-format.md` and `session-manager.ts:67-76`):
+A `CompactionEntry` (see **pi-sessions** `reference/jsonl-format.md` and `session-manager.ts:67-79`):
 
 ```ts
 {
@@ -20,19 +20,19 @@ A `CompactionEntry` (see **pi-sessions** `reference/jsonl-format.md` and `sessio
 }
 ```
 
-`buildSessionContext` (`session-manager.ts:315-422`) walks leaf-to-root and, when it sees a compaction entry on the path, emits the summary first, then messages from `firstKeptEntryId` forward. Entries before `firstKeptEntryId` and before the compaction itself are **skipped from LLM context** but still in the file.
+`buildSessionContext` (`session-manager.ts:319-366`) walks leaf-to-root and, when it sees a compaction entry on the path, emits the summary first, then messages from `firstKeptEntryId` forward. Entries before `firstKeptEntryId` and before the compaction itself are **skipped from LLM context** but still in the file.
 
 ## When compaction fires
 
-Three reasons (`compaction_start` event payload, `agent-session.ts:121`):
+Three reasons (`compaction_start` event payload, `agent-session.ts:124`):
 
 | Reason | Trigger | Code |
 |---|---|---|
-| `"manual"` | User-initiated via `/compact` command, RPC `compact` command, or `pi.compact()` from an extension. | `agent-session.ts:1626-1630` (entry to `compact()`) |
-| `"threshold"` | After each assistant message: token count exceeds `contextWindow - reserveTokens`. | `agent-session.ts:1857-1859` (post-message check), `compaction.ts:219-222` (`shouldCompact`) |
-| `"overflow"` | An LLM call **failed** with a context-overflow error; pi auto-compacts and retries. | `agent-session.ts:1813-1830` (the retry path, `willRetry: true`) |
+| `"manual"` | User-initiated via `/compact` command, RPC `compact` command, or `pi.compact()` from an extension. | `agent-session.ts:1638-1641` (entry to `compact()`) |
+| `"threshold"` | After each assistant message: token count exceeds `contextWindow - reserveTokens`. | `agent-session.ts:1874-1876` (post-message check), `compaction.ts:246-249` (`shouldCompact`) |
+| `"overflow"` | An LLM call **failed** with a context-overflow error; pi auto-compacts and retries. | `agent-session.ts:1805-1843` (the retry path, `willRetry: true`) |
 
-`shouldCompact(contextTokens, contextWindow, settings)` at `compaction.ts:219-222`:
+`shouldCompact(contextTokens, contextWindow, settings)` at `compaction.ts:246-249`:
 
 ```ts
 if (!settings.enabled) return false;
@@ -43,13 +43,13 @@ So threshold compaction fires when the *currently-estimated* token count is with
 
 ## Settings and defaults
 
-`CompactionSettings` (`compaction.ts:115-119`, also in **pi-architecture** `reference/settings-json-schema.md`):
+`CompactionSettings` (`compaction.ts:142-146`, also in **pi-architecture** `reference/settings-json-schema.md`):
 
 ```ts
 { enabled?: boolean; reserveTokens?: number; keepRecentTokens?: number }
 ```
 
-Defaults via `DEFAULT_COMPACTION_SETTINGS` at `compaction.ts:121-125`:
+Defaults via `DEFAULT_COMPACTION_SETTINGS` at `compaction.ts:147-151`:
 
 | Field | Default | Read at | Purpose |
 |---|---|---|---|
@@ -63,7 +63,7 @@ These are the values **per source**, not approximations.
 
 `prepareCompaction` → `compact` → `appendCompaction`. Three distinct phases:
 
-### Phase 1 — `prepareCompaction(pathEntries, settings)` at `compaction.ts:614-…`
+### Phase 1 — `prepareCompaction(pathEntries, settings)` at `compaction.ts:691-…`
 
 Returns a `CompactionPreparation` (`:596-612`) carrying:
 
@@ -81,19 +81,19 @@ Returns `undefined` (skip compaction) if:
 - The leaf is already a compaction entry (`:619-621`).
 - The session has no usable cut point (e.g., not enough entries).
 
-`findCutPoint` at `compaction.ts:386-…` walks backward from the leaf looking for a turn boundary that leaves `keepRecentTokens` of conversation after the cut. Default: 20000 tokens of recent conversation.
+`findCutPoint` at `compaction.ts:412-…` walks backward from the leaf looking for a turn boundary that leaves `keepRecentTokens` of conversation after the cut. Default: 20000 tokens of recent conversation.
 
-### Phase 2 — `compact(preparation, settings, ...)` at `compaction.ts:717-…`
+### Phase 2 — `compact(preparation, settings, ...)` at `compaction.ts:794-…`
 
 Generates the summary by calling the LLM. Steps:
 
-1. **Run `session_before_compact` hook** if any extension subscribes (`agent-session.ts:1655-1670` for manual, `:1913-1925` for auto). The hook can:
+1. **Run `session_before_compact` hook** if any extension subscribes (`agent-session.ts:1666-1681` for manual, `:1913-1925` for auto). The hook can:
    - Cancel via `{ cancel: true }`.
    - Replace via `{ compaction: CompactionResult }` — extension supplies the entire result, pi skips its own summarization.
-2. If no extension overrides, call `generateSummary` (`compaction.ts:530-…`). This makes a one-shot LLM call with the messages-to-summarize plus optional `customInstructions` and the `previousSummary` (for iterative update).
-3. Surfaces `compaction_end` event with `aborted` / `willRetry` flags and the `CompactionResult` (`agent-session.ts:1717` for manual, `:1989` for auto).
+2. If no extension overrides, call `generateSummary` (`compaction.ts:540-…`). This makes a one-shot LLM call with the messages-to-summarize plus optional `customInstructions` and the `previousSummary` (for iterative update).
+3. Surfaces `compaction_end` event with `aborted` / `willRetry` flags and the `CompactionResult` (`agent-session.ts:1729` for manual, `:1989` for auto).
 
-Returns a `CompactionResult` (`compaction.ts:103-111`):
+Returns a `CompactionResult` (`compaction.ts:129-138`):
 
 ```ts
 {
@@ -106,7 +106,7 @@ Returns a `CompactionResult` (`compaction.ts:103-111`):
 
 ### Phase 3 — `appendCompaction(...)` on `SessionManager`
 
-`agent-session.ts:1706` (manual) and `:1978` (auto): `this.sessionManager.appendCompaction(summary, firstKeptEntryId, tokensBefore, details, fromExtension)`. Writes the `CompactionEntry` to the JSONL file as a new child of the current leaf, advancing the leaf pointer.
+`agent-session.ts:1718` (manual) and `:1978` (auto): `this.sessionManager.appendCompaction(summary, firstKeptEntryId, tokensBefore, details, fromExtension)`. Writes the `CompactionEntry` to the JSONL file as a new child of the current leaf, advancing the leaf pointer.
 
 ## Branch summarization vs compaction
 
@@ -117,11 +117,11 @@ These are sibling operations, not the same thing.
 
 Both write `summary: string` to disk; neither is sent verbatim to the LLM as a regular message — `buildSessionContext` interprets them.
 
-`branchWithSummary` is the corresponding `SessionManager` method (`session-manager.ts:1146-1167`); see `reference/branching-resume.md`.
+`branchWithSummary` is the corresponding `SessionManager` method (`session-manager.ts:1217-1238`); see `reference/branching-resume.md`.
 
 ## Extension override and cancellation
 
-Hook: `pi.on("session_before_compact", handler)`. Payload `SessionBeforeCompactEvent` (`extensions/types.ts:536-543`):
+Hook: `pi.on("session_before_compact", handler)`. Payload `SessionBeforeCompactEvent` (`extensions/types.ts:544-551`):
 
 ```ts
 {
@@ -133,7 +133,7 @@ Hook: `pi.on("session_before_compact", handler)`. Payload `SessionBeforeCompactE
 }
 ```
 
-Result `SessionBeforeCompactResult` (`extensions/types.ts:1027-1030`):
+Result `SessionBeforeCompactResult` (`extensions/types.ts:1036-1039`):
 
 ```ts
 { cancel?: boolean; compaction?: CompactionResult }
@@ -141,13 +141,13 @@ Result `SessionBeforeCompactResult` (`extensions/types.ts:1027-1030`):
 
 The hook fires for **both** manual and automatic compaction. To replace the default behavior wholesale (e.g. `examples/extensions/custom-compaction.ts`), the handler builds its own `CompactionResult` from `preparation.messagesToSummarize` and returns it as `{ compaction: ... }`.
 
-To **cancel**, return `{ cancel: true }`. Pi emits `compaction_end` with `aborted: true` (`agent-session.ts:1922-1928` for auto path).
+To **cancel**, return `{ cancel: true }`. Pi emits `compaction_end` with `aborted: true` (`agent-session.ts:1925-1946` for auto path).
 
-After compaction completes, `session_compact` fires with the saved `CompactionEntry` and `fromExtension: boolean` (`extensions/types.ts:545-550`).
+After compaction completes, `session_compact` fires with the saved `CompactionEntry` and `fromExtension: boolean` (`extensions/types.ts:552-557`).
 
 ## Provider-driven retry path
 
-When `_runAutoCompaction("overflow", true)` runs (`agent-session.ts:1830`), `willRetry` is `true` — pi will re-issue the failing turn after compaction completes. The flow:
+When `_runAutoCompaction("overflow", true)` runs (`agent-session.ts:1843`), `willRetry` is `true` — pi will re-issue the failing turn after compaction completes. The flow:
 
 1. LLM call fails with context-overflow error class.
 2. Pi calls `_runAutoCompaction("overflow", true)`.
@@ -160,7 +160,7 @@ If compaction itself fails (e.g. the summary call also overflows), `compaction_e
 
 - **`enabled: false` doesn't disable manual.** `shouldCompact` returns `false`, so threshold and overflow paths skip. But `pi.compact()` and `/compact` still run.
 - **`keepRecentTokens` is a floor, not a hard target.** The cut-point search only enforces "at least this many" — actual kept tokens can be larger if the nearest turn boundary is far back.
-- **`firstKeptEntryId` is the first entry kept, not the last summarized one.** For tree-walk semantics, see `buildSessionContext` at `session-manager.ts:381-415`.
+- **`firstKeptEntryId` is the first entry kept, not the last summarized one.** For tree-walk semantics, see `buildSessionContext` at `session-manager.ts:385-419`.
 - **An extension that returns `{cancel: true}` during overflow compaction means pi can't retry the LLM call.** The original overflow error propagates as the assistant turn's failure.
 - **`previousSummary` chains.** Each subsequent compaction sees the prior compaction's summary in `preparation.previousSummary` and is expected to fold new content into it. Long sessions accumulate dense summaries this way.
 

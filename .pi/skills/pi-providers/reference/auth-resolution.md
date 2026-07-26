@@ -1,17 +1,25 @@
 # Auth Resolution
 
-How pi resolves credentials for a given provider, what `~/.pi/agent/auth.json` contains, and the OAuth-vs-API-key billing distinction (especially for Anthropic). All cites against the current pin (`v0.80.9`, `2d16f929`).
+How pi resolves credentials for a given provider, what `~/.pi/agent/auth.json` contains, and the OAuth-vs-API-key billing distinction (especially for Anthropic). All cites against the current pin (`v0.82.1`, `b4f29368`).
 
 ## The five-step resolution order
 
-The authoritative resolver is `AuthStorage.getApiKey(providerId, options?)` at `packages/coding-agent/src/core/auth-storage.ts:473-534`. The order below mirrors the function body. Higher entries win; the resolver short-circuits as soon as one returns a value.
+> ⚠️ **STALE — pending re-derivation (confidence: low).** The table below described `AuthStorage.getApiKey(providerId, options?)`, which **no longer exists**. The `9993c969` "replace model registry with model runtime" refactor (landed **v0.80.8**, so this was already dead at the previous `v0.80.9` pin — missed by that gap-scan) moved auth resolution out of `AuthStorage` entirely. Every `auth-storage.ts:4xx/5xx` cite in the table is dead: the file is now 271 lines and holds **credential storage only** (`AuthStorage` class at `auth-storage.ts:171` — `read` `:217`, `modify` `:224`, `delete` `:242`, `list` `:252`, with `resolveConfigValue` expansion at `:221`).
+>
+> **Verified new entry points** (confidence: high):
+> - `ModelRuntime.getAuth(providerId | model, overrides?)` — `packages/coding-agent/src/core/model-runtime.ts:374-376`. The runtime-level resolver.
+> - `composeApiKeyAuth(...)` — `packages/coding-agent/src/core/provider-composer.ts:293`. Composes the per-provider API-key chain: stored credential → configured API key (`resolveConfigValueOrThrow` at `:343`) → `inherited` provider default (env vars). `composeOAuthAuth` at `:359` handles the OAuth branch.
+> - `ModelRegistry.getApiKeyForProvider(provider)` — `packages/coding-agent/src/core/model-registry.ts:107-113`, now a thin delegate to `runtime.getAuth(provider)`.
+> - Env-var lookup: `getEnvApiKey` — `packages/ai/src/env-api-keys.ts:143`.
+>
+> The *precedence outcome* below is probably still broadly right (runtime override → `auth.json` → env → `models.json`), but it has **not** been re-derived against the composer chain — do not cite the line numbers in the table until it has.
 
 | # | Source | Code | Notes |
 |---|---|---|---|
 | 1 | **Runtime override** (`--api-key` CLI flag, `pi.setApiKey` from extensions) | `auth-storage.ts:474-477` (`runtimeOverrides` map declared at `:201`, populated by `setRuntimeApiKey` at `:230-232`) | In-memory only, lives for the process. CLI flag wires here via `args.ts` → `main.ts`. |
 | 2 | **`auth.json` API-key entry** | `auth-storage.ts:482-484` | Calls `resolveConfigValue(cred.key, cred.env)` (`:483`) — supports `!shell-command`, env-var-name lookup, or literal value. The optional `cred.env` is the per-credential env scope added in 0.79.5 (see "Provider-scoped env overrides" below). |
 | 3 | **`auth.json` OAuth entry** | `auth-storage.ts:486-522` | Auto-refreshes if `Date.now() >= cred.expires` (`:494`) using a file lock (`refreshOAuthTokenWithLock` at `:418-462`). On refresh failure, re-reads the file in case another instance won the lock; otherwise returns `undefined` so model discovery skips this provider rather than erroring. |
-| 4 | **Environment variable** (via `getEnvApiKey`) | `auth-storage.ts:524-525` → `packages/ai/src/env-api-keys.ts:136-`(function body) | The env-var name is per-provider; see `reference/built-in-providers.md` and `getApiKeyEnvVars` at `env-api-keys.ts:64-110`. |
+| 4 | **Environment variable** (via `getEnvApiKey`) | `auth-storage.ts:524-525` → `packages/ai/src/env-api-keys.ts:143-`(function body) | The env-var name is per-provider; see `reference/built-in-providers.md` and `getApiKeyEnvVars` at `env-api-keys.ts:68-117`. |
 | 5 | **Custom resolver** (`models.json` provider keys) | `auth-storage.ts:528-531` | Behind `options?.includeFallback !== false` so model discovery can opt out. The `fallbackResolver` is wired up by the model registry. |
 
 The `packages/coding-agent/docs/providers.md` doc summarizes this as a four-step list (CLI → auth.json → env → models.json) — accurate in spirit, but it flattens steps 2 and 3 (api_key vs oauth inside `auth.json`) into one. Both file entries are checked at the same priority level; the entry's `type` field decides which branch runs.
@@ -72,7 +80,7 @@ OAuth tokens are populated by the `/login` flow per provider (`/login` resolves 
 
 The Anthropic OAuth path is the source of two recurring questions: "is pi using my OAuth or API key?" and "why does pi say I'm out of credits when I have a Max sub?" Both reduce to one detail.
 
-**OAuth-token prefix detection**: `interactive-mode.ts:193-195`:
+**OAuth-token prefix detection**: `interactive-mode.ts:200-203`:
 
 ```typescript
 function isAnthropicSubscriptionAuthKey(apiKey: string | undefined): boolean {
@@ -80,7 +88,7 @@ function isAnthropicSubscriptionAuthKey(apiKey: string | undefined): boolean {
 }
 ```
 
-The `sk-ant-oat` prefix means "Anthropic OAuth Access Token" — i.e. the credential is from `/login` against `claude.ai`, not from the API console. When this returns true, pi shows the warning constant `ANTHROPIC_SUBSCRIPTION_AUTH_WARNING` at `interactive-mode.ts:190-191` (emission helper `maybeWarnAboutAnthropicSubscriptionAuth` at `:4165`, `showWarning(...)` calls at `:4181` and `:4191`):
+The `sk-ant-oat` prefix means "Anthropic OAuth Access Token" — i.e. the credential is from `/login` against `claude.ai`, not from the API console. When this returns true, pi shows the warning constant `ANTHROPIC_SUBSCRIPTION_AUTH_WARNING` at `interactive-mode.ts:197-199` (emission helper `maybeWarnAboutAnthropicSubscriptionAuth` at `:4165`, `showWarning(...)` calls at `:4181` and `:4191`):
 
 > "Anthropic subscription auth is active. Third-party harness usage draws from extra usage and is billed per token, not your Claude plan limits. Manage extra usage at https://claude.ai/settings/usage."
 
@@ -88,7 +96,7 @@ This is the canonical statement of the billing model: **OAuth-from-Claude-Pro/Ma
 
 ### Env-var precedence: `ANTHROPIC_OAUTH_TOKEN` wins
 
-`env-api-keys.ts:69-72` — for the `anthropic` provider only, `ANTHROPIC_OAUTH_TOKEN` is checked **before** `ANTHROPIC_API_KEY`. So:
+`packages/ai/src/env-api-keys.ts:76` — for the `anthropic` provider only, `ANTHROPIC_OAUTH_TOKEN` is checked **before** `ANTHROPIC_API_KEY`. So:
 
 - Both env vars set → OAuth wins → subscription/extra-usage billing.
 - Only `ANTHROPIC_API_KEY` set → API billing on the corresponding API account.
@@ -108,13 +116,13 @@ Recovery options:
 ### "Is pi using OAuth or my API key right now?"
 
 1. Read `~/.pi/agent/auth.json`. The `anthropic` entry's `type` field tells you (`"api_key"` vs `"oauth"`).
-2. If env vars matter: check `ANTHROPIC_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` in the running shell. OAuth wins (`env-api-keys.ts:69-72`).
+2. If env vars matter: check `ANTHROPIC_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` in the running shell. OAuth wins (`packages/ai/src/env-api-keys.ts:76`).
 3. The interactive `/login` UI shows the active credential source (look for "stored" / "environment" labels — see `AuthStatus.source` at `auth-storage.ts:38-42`).
 4. If pi prints the `ANTHROPIC_SUBSCRIPTION_AUTH_WARNING` at startup or after a `/login`, you're on OAuth/extra-usage.
 
 ### "Why does pi say I'm out of Anthropic credits when I have a Max sub?"
 
-You're hitting the third-party-app extra-usage cap, not your Pro/Max plan. The warning at `interactive-mode.ts:190-191` says exactly this: subscription auth bills from extra usage, billed per token, not against your Pro/Max plan limits. Visit https://claude.ai/settings/usage to see the pool state. To bypass, switch to `ANTHROPIC_API_KEY`-based auth (and clear or shadow `ANTHROPIC_OAUTH_TOKEN`).
+You're hitting the third-party-app extra-usage cap, not your Pro/Max plan. The warning at `interactive-mode.ts:197-199` says exactly this: subscription auth bills from extra usage, billed per token, not against your Pro/Max plan limits. Visit https://claude.ai/settings/usage to see the pool state. To bypass, switch to `ANTHROPIC_API_KEY`-based auth (and clear or shadow `ANTHROPIC_OAUTH_TOKEN`).
 
 ### "Why does my `--api-key` flag not seem to take effect?"
 
@@ -127,7 +135,7 @@ Use the shell-command form: `{ "type": "api_key", "key": "!op read 'op://vault/i
 ## Cross-references
 
 - The actual Anthropic OAuth flow (PKCE, `claude.ai`-hosted authorization) lives in `packages/ai/src/auth/oauth/anthropic.ts` (relocated from `packages/ai/src/utils/oauth/anthropic.ts` in the 0.80.x re-architecture) — outside this skill's primary territory but cited here for completeness.
-- The `anthropic-beta` headers `claude-code-20250219,oauth-2025-04-20` set on OAuth requests (`api/anthropic-messages.ts:884`) interact with prompt caching — see **pi-prompt-assembly** `reference/cache-breakpoints.md` (the OAuth identity preamble is breakpoint #1a there). Note: in the 0.80.x AI-package re-architecture the streaming/OAuth logic moved from `packages/ai/src/providers/anthropic.ts` (now an 18-line provider shell) to `packages/ai/src/api/anthropic-messages.ts`.
+- The `anthropic-beta` headers `claude-code-20250219,oauth-2025-04-20` set on OAuth requests (`api/anthropic-messages.ts:894`) interact with prompt caching — see **pi-prompt-assembly** `reference/cache-breakpoints.md` (the OAuth identity preamble is breakpoint #1a there). Note: in the 0.80.x AI-package re-architecture the streaming/OAuth logic moved from `packages/ai/src/providers/anthropic.ts` (now an 18-line provider shell) to `packages/ai/src/api/anthropic-messages.ts`.
 - Per-provider env vars and `auth.json` keys: see `reference/built-in-providers.md`.
 - Custom-provider auth (extensions registering their own OAuth flows): `pi.registerProvider` documented in `packages/coding-agent/docs/custom-provider.md`.
 - The global `httpProxy` setting in `~/.pi/agent/settings.json` (0.79.5) and per-credential `env: {}` overrides both compose with the auth-resolution path — see `settings-manager.ts:120` for the setting and `http-dispatcher.ts:42-45` for `applyHttpProxySettings` (sets `process.env.HTTP_PROXY` and `HTTPS_PROXY` via `??=`, so pre-existing process-env values still win).
