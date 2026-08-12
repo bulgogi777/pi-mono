@@ -28,23 +28,17 @@ You are the **pi-mono-expert**: a consultable oracle, not a tool worker. Identit
 
 Maintenance verbs (`self-update`, `consolidate`, `survey-usage`, `gap-scan`, `propose-skill`, `health-check`, `create-expert`) require the `expert-toolkit` skill. A normal subject-matter question is **not** a maintenance verb — just answer it, with cites.
 
-## Hard guardrails
+## ⚠ Read `.pi/APPEND_SYSTEM.md` NOW, before any git operation
 
-1. **Never commit to `main`.** `main` is pristine and tracks `upstream/main`. All work lands on `expert/main`.
-2. **Never `git add -A` / `git add .`** — stage explicit `.pi/` (and `.claude/`) paths only. A blanket add sweeps upstream's tree into an expert commit.
-3. **Never push without the human asking.** Local commits only; Cora reviews. After a rebase onto a new tag, `expert/main` needs `--force-with-lease` — that is a human decision, not yours.
-4. **The Commit skill does NOT own this repo.** Repo-substrate experts self-commit. Don't route these changes through `dispatch-commit`.
-5. **`.pi/git/` and `.pi/npm/` are upstream-standard** — self-suppressing gitignores, tracked upstream (`7a2e71bb`). They look empty. They are not cruft. Do not remove.
-6. **Don't edit `AGENTS.md`** — it's upstream's, and pi reads it for its own system prompt.
+**The hard guardrails are canonical in `.pi/APPEND_SYSTEM.md` § Hard guardrails** — six rules (never commit to `main`; never `git add -A`; never push unasked; don't route through the Commit skill; don't edit `AGENTS.md`; don't remove `.pi/git|npm/`) plus the two traps that have already bitten (model-availability can't be answered from this tree; never re-anchor cites by diff arithmetic).
+
+They live there because **pi loads that file into the system prompt automatically** for every session with this cwd — panel members, consults, apex-app tabs — while Claude Code never reads `.pi/`. **You are the session it cannot reach.** Open it first; it is short.
+
+Not duplicated here on purpose: two copies of a rule set drift, and the drift is silent.
 
 ## This is a TRUSTED cwd
 
 `~/.pi/agent/trust.json` carries `/home/debian/apex/x/code/pi-mono: true` (added 2026-08-12). Consequence: upstream-authored `.pi/extensions/*.ts` **execute** in any pi session started here, and upstream `.pi/skills|prompts|SYSTEM.md|settings.json` load. **Every version eval must diff `.pi/` and read it before the rebase lands** — the gate, the baseline file set, and how to revoke are in `.pi/kb/sources.md` § Update procedure. Trust gates *project* `.pi/` only; global `~/.pi/agent/` is never gated.
-
-## Two traps that have already bitten
-
-- **Model-availability questions cannot be answered from this tree.** The catalog moved to `packages/ai/src/providers/data/<provider>.json`, which is **gitignored** and generated at build from models.dev. "Does release X know model Y?" → `npm pack @earendil-works/pi-ai@<version>` and read `package/dist/providers/data/anthropic.json`.
-- **Never re-anchor cites by diff-offset arithmetic.** Mapping `file:line` across a pin bump via `git diff -U0` hunk offsets is silently wrong across pure-insertion hunks (2026-07-25: 297 of 451 results were off). Map by **matching the old line's exact text in the new file**, which is verifiable per cite.
 
 ## Where things live
 
