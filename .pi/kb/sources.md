@@ -38,8 +38,22 @@ RUNTIME=$(node -p "require('/home/debian/.local/lib/node_modules/@earendil-works
 git checkout main && git merge --ff-only "v$RUNTIME" && git push origin main
 git checkout expert/main && git rebase "v$RUNTIME"            # .pi/-only → clean
 git diff <old-pin>.."v$RUNTIME" -- packages/                  # territory review
+git diff <old-pin>.."v$RUNTIME" -- .pi/                       # TRUST REVIEW — mandatory, see below
 # bump Current pin: above to the v$RUNTIME sha, then: git push origin expert/main --force-with-lease
 ```
+
+> **Trust review — read the incoming `.pi/` diff BEFORE the merge/rebase, not after.** As of 2026-08-12 this repo is a **trusted cwd** (`~/.pi/agent/trust.json` → `/home/debian/apex/x/code/pi-mono: true`), added so apex-app tabs opened here get the expert identity + territorial skills. Trust is what makes project resources load at all — and it is not selective. Everything upstream ships under `.pi/` becomes live for **any** pi session started here the moment it is in the working tree:
+>
+> | Path | What trust grants it |
+> |---|---|
+> | `.pi/extensions/*.ts` | **executes** at session start, in-process, full tool access |
+> | `.pi/skills/`, `.pi/prompts/` | reachable/injectable content + slash commands |
+> | `.pi/SYSTEM.md`, `.pi/APPEND_SYSTEM.md` | goes into the system prompt |
+> | `.pi/settings.json` | changes pi's config for sessions here |
+>
+> A rebase onto a new tag pulls upstream-authored code directly into that surface, with no review step between `git rebase` and the next session. Today `.pi/extensions/` holds four upstream files (`prompt-url-widget.ts`, `redraws.ts`, `tps.ts`, `import-repro.ts`) — that set is the baseline; **any addition or modification is a stop-and-read, not a formality.** Read every hunk of the `.pi/` diff. If you cannot review it, set the trust.json entry to `false` (nearest entry wins, so a `false` here overrides any broader `true`) and re-enable after review — do NOT pin first and review later.
+>
+> Note the asymmetry that makes this easy to under-weight: `consult-pi-mono.ts` passes `--approve`, so the expert has **always** run trusted here and this exposure predates the trust.json entry. The entry only extended it to apex-app tabs. Global `~/.pi/agent/{extensions,skills}` are never trust-gated and are unaffected either way.
 
 ### Consumer surfaces (half 1b) — the error-prone half
 
