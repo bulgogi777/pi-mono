@@ -6,6 +6,84 @@ Citations: `<sha>` for commit; `<file>:<line>` against the **new pin** (unless o
 
 ---
 
+## 2026-08-12 — pulled to `53fa77cc` (v0.84.1)
+
+> Runtime npm global upgraded `0.82.1 → 0.84.1` and **verified live before the pin bump** — six gates, all passed (see below). `main` fast-forwarded to `v0.84.1`; `expert/main` rebased clean (`.pi/`-only, 23 commits, 0 non-`.pi`/`.claude` files). Trigger: routine forward eval; the pin was **not** stale (it matched the runtime exactly). Run as a two-party eval with the `chat-eng` apex-app session, which owns the largest consumer of pi's wire — that consult changed the outcome and is why the entry below records a **refutation** section.
+
+**Previous pin:** `b4f29368` (2026-07-25; covers 0.80.10 → 0.82.1)
+**Target:** tag `v0.84.1` = `53fa77cc`. New releases in range: `0.83.0`, `0.84.0`, `0.84.1`.
+**Diff scope:** `v0.82.1..v0.84.1` = 434 commits, 659 files, ~56.7k insertions / ~15.0k deletions. New packages: `protocol`, `client`, `telemetry`, `session-backends` (renamed from `storage`). **Most of the volume is irrelevant to us by construction — we run pi in RPC mode only, never the TUI** (59 TUI files, fullscreen mode, Mermaid/LaTeX, scrollbars: all noise for our purposes).
+
+### Behavior changes that matter (territory)
+
+**THE consumer-facing change: `message_update` is delta-only (high) — BREAKING for wire consumers**
+- v0.84.0 removed the cumulative `message` field and `assistantMessageEvent.partial` from every `message_update` (upstream #7290, "quadratic output growth"). Stripper is the NEW `packages/coding-agent/src/modes/json-event.ts`; applied in RPC at `packages/coding-agent/src/modes/rpc/rpc-mode.ts:356` and in print mode at `packages/coding-agent/src/modes/print-mode.ts:110`. Docs rewritten at `packages/coding-agent/docs/rpc.md` § "message_update (Streaming)".
+- **`rpc-types.ts` had an EMPTY diff across this range** while the payload changed underneath it. Any future audit that reads only the types file will miss a change of this class — this is the finding gate 6 encodes.
+- Clients must assemble text from deltas between `message_start` and `message_end`; `message_end.message` remains authoritative. `text_start`/`thinking_start`/`toolcall_start` now carry **only** `contentIndex` — they are not a viable carrier for anything.
+
+**Anthropic OAuth/billing stealth — unchanged (high)**
+- `packages/ai/src/api/anthropic-messages.ts` +19/−8, none of it billing-related. `sk-ant-oat` detect `:844`; `anthropic-beta: claude-code-20250219,oauth-2025-04-20` `:902`; Claude Code identity block `:980`. Verified live: gate 2 returned `cacheWrite=60394`.
+
+**Project-trust gating — unchanged (high)**
+- `project-trust.ts` absent from the diff entirely. Gates at `packages/coding-agent/src/core/resource-loader.ts:1024`, `:1038`. `resource-loader.ts` is +81/−? but the change is context-file discovery, not trust: `AGENTS.override.md` is now the FIRST per-directory candidate (`:71`) and linked-worktree shadowing was added (`:91-116`).
+
+**Session JSONL on disk — unchanged (high)**
+- `packages/coding-agent/src/core/session-manager.ts` is **+3/−1** (a symlink-directory fix at `:1675`) and coding-agent does **not** adopt pi-agent-core's new v4 `SessionRepo` (grep for `JsonlSessionRepo|SessionRepo` in `packages/coding-agent/src` returns nothing at this pin). The agent-package breaking note "Removed the legacy JSONL and in-memory repository APIs" is **harness-internal** and does not touch the files under `~/.pi/agent/sessions/`. Resume-by-file, fork lineage, and PAI's transcript deriver are all unaffected.
+
+**Model catalog — all four ids we use survived (high)**
+- `claude-opus-5`, `claude-sonnet-5`, `claude-haiku-4-5`, `claude-opus-4-8` all present in `pi-ai@0.84.1` → `package/dist/providers/data/anthropic.json` (unpacked via `npm pack`; the tree cannot answer this since 0.81.x). Built-in `defaultModelPerProvider.anthropic` is **still** `claude-opus-4-8` (`packages/coding-agent/src/core/model-resolver.ts:23`, confirmed in the installed dist at `:13`). **No consumer model flip was required in this range** — the first upgrade where half 1b was a no-op.
+
+**Extension API — additive (high)**
+- `packages/coding-agent/src/core/extensions/types.ts` +36/−3. The three removed lines are two comments plus one signature: `refreshToken(credentials)` → `refreshToken(credentials, signal)`, which lands only on config-form OAuth providers. Everything apex-app's extensions use is untouched. Confirmed empirically: chat-eng bumped apex-app's devDep 0.82.1 → 0.84.1 and `bun run typecheck` exited 0 on both configs.
+
+**Smaller RPC-surface changes (medium)**
+- `rpc-mode.ts:466`, `:486` — `set_model` / `get_available_models` now use `modelRuntime.getAvailableSnapshot()` (sync) instead of `await getAvailable()`. Shape unchanged; a cold session may return a smaller catalog until the refresh lands. Degraded, not broken; no measurement that it bites in practice.
+- `rpc-mode.ts:557-577` — the `bash` command now fires an extension `user_bash` event first and can be answered without executing.
+- `AI_AGENT=pi` added to CLI and RPC child-process environments (#7493).
+
+### The downstream trap: a data-loss FIX upstream that reads as a regression
+
+- v0.84.0 also fixed pi-ai to preserve content carried on the initial `content_block_start` (#7358 → `packages/ai/src/api/anthropic-messages.ts:588-603`; `text: event.content_block.text ?? ""` replacing `""`, same for `thinking`/`signature`). Before the fix that text was dropped **everywhere**, final message included; after it, the text is in the final message but **never appears as a delta** — `text_start` carries no content.
+- **Frequency, from the originating issue #7283 (high):** the reporter states real Anthropic messages "almost always start with an empty string" and that the seeded case comes from **Anthropic-*compatible* gateways** (LiteLLM-class). So the trigger is our `ollama-cloud` drought fallback (`ANTHROPIC_BASE_URL` swap onto the same parser) and `cloudflare-ai-gateway` — **not** `api.anthropic.com`.
+- **Net:** 0.84.1 is strictly *better* on final-message fidelity. The only artifact is a delta-buffer divergence in clients that never consult the final message on that path.
+
+### Refutation from the consumer side (chat-eng, apex-app) — recorded because the expert was wrong
+
+The expert's first-pass consumer analysis was partly wrong and the corrections are worth keeping:
+1. **Severity over-called.** apex-app's `turn_end` overwrites the delta buffer unconditionally from the canonical message, so a seeded head is a *mid-stream flicker*, not permanent loss. Permanent loss exists only on the `agent_end` termination path, which flushes the raw buffer with no message preference.
+2. **The suggested fix was wrong for the consumer's state shape.** `currentAssistantText` is a flat string, not a per-`contentIndex` map, so replace-on-`text_end` would drop earlier blocks in a `text → toolcall → text` message. The correct shape is a **splice** at an offset recorded at `text_start`.
+3. **The devDependency call was inverted.** A consumer pinned to the old package keeps a green typecheck gate while the runtime drifts — *the gate cannot see the version it does not have*. Bumping the consumer devDep **before** the `npm -g` converts a live-upgrade breakage into a compile error delivered while nothing has moved yet. Adopted into gate 6.
+4. **A typecheck gate is not a fixture gate.** On the consumer side, dropping the dead fields from the hand-rolled types surfaced **1 of 4** stale fixture sites — the other three sit outside any typecheck config and would have kept passing while asserting a wire that no longer exists. Grep fixtures by hand.
+
+### Verification — six gates, all passed BEFORE the pin bump
+
+| # | Gate | Result |
+|---|---|---|
+| 1 | RPC timing / terminal-event contract | **PASS** — `consult-pi-mono.ts` 4.11s, clean `agent_end`, exit 0 |
+| 2 | Billing floor (OAuth subscription cache path) | **PASS** — `cacheWrite=60394` |
+| 3 | Model resolve from the installed dist | **PASS** — `anthropic: "claude-opus-4-8"` in `dist/**/model-resolver.js:13` |
+| 4 | Trust gating in the installed dist | **PASS** — `isProjectTrusted()` present |
+| 5 | Dispatch proof (session record, not self-report) | **PASS** — `"model":"claude-opus-5"` in the session JSONL |
+| 6 | **Wire shape (NEW this run)** | **PASS** — 4 `message_update` events, delta types `text_start`/`text_delta`/`text_end`, zero `message`/`partial`; positive control fired 2/2 first |
+
+Gate 6 is implemented as `~/apex/efforts/pi-code/scripts/gate-wire-shape.ts` — a real `pi --mode rpc` subprocess, raw stdout JSONL, assertions run against a synthetic legacy line **first** so a green run is not a check that never ran. It lives on the **producer** side deliberately (chat-eng's ask): a wire gate catches a shape change for every consumer, not just apex-app.
+
+### Trust review (mandatory gate, run BEFORE the rebase)
+
+`git diff v0.82.1..v0.84.1 -- .pi/` = **one file, three lines**: `.pi/extensions/prompt-url-widget.ts` imports `hyperlink` from `@earendil-works/pi-tui` and wraps two display strings in it (`:5`, `:178`, `:181`). Read in full; benign. The extension set is still the four baseline files (`prompt-url-widget.ts`, `redraws.ts`, `tps.ts`, `import-repro.ts`) plus `.pi/prompts/sa.md`, which upstream added earlier. No new executable surface.
+
+### kb files updated in this run
+
+- `sources.md` — pin bumped `b4f29368` → `53fa77cc`; **gate 6 (wire shape) added** to Post-upgrade verification along with the "read the *Fixed* section for downstream shape impact" corollary.
+- `version-log.md` — this entry.
+
+### Still stale / flagged
+
+- **Full cite re-anchor NOT done in this run.** Measured: **38 of 53** fully-qualified cited files in `.pi/skills` + `.pi/kb` changed across `v0.82.1..v0.84.1`. Per the standing method note, that is a **two-pass gap-scan** (drift pass by content match, then a targeted error pass) and it is deliberately scoped as separate follow-on work rather than expanded into this upgrade.
+- **Two cited files are already dead and survived the last gap-scan:** `packages/ai/src/anthropic.ts` and `packages/ai/src/utils/oauth/anthropic.ts`. Both were casualties of the 0.80.x provider re-architecture. Consistent with the standing finding that content-matching fixes *drift*, not *errors*.
+
+---
+
 ## 2026-07-25 — pulled to `b4f29368` (v0.82.1)
 
 > Runtime npm global upgraded `0.80.9 → 0.82.1` and **verified live before the pin bump** (all four gates in `sources.md` passed: consult RPC 4.46s clean exit, `cacheWrite=53158` OAuth subscription cache path, model resolve, trust gating). `main` fast-forwarded to `v0.82.1`; `expert/main` rebased clean (`.pi/`-only, 13 commits). Trigger: Anthropic released **Claude Opus 5** and we needed to know whether pi had it.
