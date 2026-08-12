@@ -60,6 +60,24 @@ Genuine workflow shortcuts for pi-mono development. Preserve.
 **Cruft removed at scaffold time:**
 - `.pi/SYSTEM.sync-conflict-20260510-142931-PSCCMSD.md` — Syncthing conflict of the old intended identity file. Its substance was folded into this `APPEND_SYSTEM.md`. Removed (verified absent).
 
+## Hard guardrails (canonical — these bind every session with this cwd)
+
+This repo is a fork carrying an expert's identity inside someone else's tree. Upstream owns `packages/`, the root configs, and `AGENTS.md`; we author only `.pi/` (and `.claude/`, for Claude Code sessions).
+
+1. **Never commit to `main`.** `main` is pristine and tracks `upstream/main`. All work lands on `expert/main`.
+2. **Never `git add -A` / `git add .`** — stage explicit `.pi/` / `.claude/` paths. A blanket add sweeps upstream's tree into an expert commit.
+3. **Never push unless the human asked.** Local commits only. After a rebase onto a new tag, `expert/main` needs `--force-with-lease` — that is a human decision, not yours.
+4. **The Commit skill does not own this repo.** Repo-substrate experts self-commit; never route these changes through `dispatch-commit`.
+5. **Never edit `AGENTS.md`** — it is upstream's, and pi loads it into the system prompt from the cwd ancestry.
+6. **`.pi/git/` and `.pi/npm/` are upstream-standard**, tracked upstream (`7a2e71bb`), holding only self-suppressing gitignores. They look empty. They are not cruft. Do not remove.
+
+**Two traps that have already bitten:**
+
+- **Model-availability questions cannot be answered from this tree.** Since 0.81.x the catalog lives in `packages/ai/src/providers/data/<provider>.json`, which is **gitignored** and generated at build. Reading the git tree reports a model missing when it exists. Use `npm pack @earendil-works/pi-ai@<version>` and read `package/dist/providers/data/anthropic.json`.
+- **Never re-anchor citations by diff-offset arithmetic.** Mapping `file:line` across a pin bump via `git diff -U0` hunk offsets is silently wrong across pure-insertion hunks (2026-07-25: 297 of 451 results were off). Map by matching the old line's exact text in the new file — verifiable per cite.
+
+**This is a trusted cwd** (`~/.pi/agent/trust.json`), so upstream-authored `.pi/extensions/*.ts` execute here and upstream `.pi/` prompt content loads. Any version eval must diff `.pi/` and read it before the rebase lands — gate and revocation in `.pi/kb/sources.md` § Update procedure.
+
 ## Citation and verification discipline
 
 - Cite source. Name the file and line — e.g., `packages/coding-agent/src/resource-loader.ts:30-45`. The repo is small; precision is cheap.
@@ -69,4 +87,4 @@ Genuine workflow shortcuts for pi-mono development. Preserve.
 
 ## Anything else worth always-loading
 
-None. Detail lives in `.pi/kb/` and the territorial skills. Load on demand.
+Only the guardrails above — they are always-on because they must be present *before* a decision to commit, stage, or push, not merely lookup-able afterwards. Everything else (repo orientation, update runbook, version history) lives in `.pi/kb/` and the territorial skills, and loads on demand.
