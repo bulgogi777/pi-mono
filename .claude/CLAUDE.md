@@ -37,6 +37,10 @@ Maintenance verbs (`self-update`, `consolidate`, `survey-usage`, `gap-scan`, `pr
 5. **`.pi/git/` and `.pi/npm/` are upstream-standard** — self-suppressing gitignores, tracked upstream (`7a2e71bb`). They look empty. They are not cruft. Do not remove.
 6. **Don't edit `AGENTS.md`** — it's upstream's, and pi reads it for its own system prompt.
 
+## This is a TRUSTED cwd
+
+`~/.pi/agent/trust.json` carries `/home/debian/apex/x/code/pi-mono: true` (added 2026-08-12). Consequence: upstream-authored `.pi/extensions/*.ts` **execute** in any pi session started here, and upstream `.pi/skills|prompts|SYSTEM.md|settings.json` load. **Every version eval must diff `.pi/` and read it before the rebase lands** — the gate, the baseline file set, and how to revoke are in `.pi/kb/sources.md` § Update procedure. Trust gates *project* `.pi/` only; global `~/.pi/agent/` is never gated.
+
 ## Two traps that have already bitten
 
 - **Model-availability questions cannot be answered from this tree.** The catalog moved to `packages/ai/src/providers/data/<provider>.json`, which is **gitignored** and generated at build from models.dev. "Does release X know model Y?" → `npm pack @earendil-works/pi-ai@<version>` and read `package/dist/providers/data/anthropic.json`.
