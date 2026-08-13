@@ -77,8 +77,9 @@ const newByBase = byBasename(newFiles);
  * independently unique across the full candidate set — the table carried the other 43.
  *
  * And content can never settle some of them. `packages/agent/src/harness/` holds
- * near-duplicates of `packages/coding-agent/src/core/` — 354 identical lines between the
- * two `compaction.ts` files at v0.84.1 — so the rival candidates contain the SAME text.
+ * near-duplicates of `packages/coding-agent/src/core/` — 582 lines match in order between
+ * the two `compaction.ts` files at v0.84.1, and `tools/edit-diff.ts` is a 496-of-501-line
+ * contiguous copy — so the rival candidates contain the SAME text.
  * No matcher can discriminate; only the doc can, by saying which file it means.
  *
  * So the fix lives upstream of this tool: `qualify-cites.ts` rewrote every under-specified
