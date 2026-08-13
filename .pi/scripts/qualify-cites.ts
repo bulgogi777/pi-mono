@@ -10,9 +10,10 @@
  * file" manufactures a confident-wrong anchor that the next pass faithfully preserves.
  *
  * And it cannot always be solved by content either: `packages/agent/src/harness/` carries
- * near-duplicates of `packages/coding-agent/src/core/` (measured at v0.84.1: 354 identical
- * lines between the two `compaction.ts` files). For those, NO amount of content matching
- * discriminates, because the content is the same. The only durable fix is to write the
+ * near-duplicates of `packages/coding-agent/src/core/` (measured at v0.84.1: 582 lines match
+ * in order between the two `compaction.ts` files; `tools/edit-diff.ts` is a 496-of-501-line
+ * contiguous copy). For those, NO amount of content matching discriminates, because the
+ * content is the same. The only durable fix is to write the
  * path down.
  *
  * Minimal unique suffix, not the full path: `extensions/loader.ts` already separates
