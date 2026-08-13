@@ -39,7 +39,7 @@ Read these as cause → cascade.
 
 - **Editing an `AGENTS.md` / `CLAUDE.md` reachable from cwd** → same as APPEND_SYSTEM: invalidates the system-prompt block, leaves everything else intact. The pi-architecture ancestor walk decides which file content is in scope (see `pi-architecture` skill).
 
-- **Editing a skill's `name` / `description` / file `location`** → invalidates the system-prompt block because `formatSkillsForPrompt` (`skills.ts:335-361`) renders these into the prompt. Same blast radius as AGENTS.md.
+- **Editing a skill's `name` / `description` / file `location`** → invalidates the system-prompt block because `formatSkillsForPrompt` (`core/skills.ts:335-361`) renders these into the prompt. Same blast radius as AGENTS.md.
 
 - **Editing a skill's body (everything after the YAML frontmatter)** → **zero** cache impact. The body is never in the system prompt; it's loaded by the model via a `read` tool call when the skill is invoked. Tool-result caching for that read still works the same way as any other read result (gets cached on the next conversation-tail breakpoint).
 

@@ -12,7 +12,7 @@ A prompt template is a markdown file with optional YAML frontmatter, stored unde
 
 The basename (minus `.md`) becomes the template name. So `~/.pi/agent/prompts/refactor.md` becomes `/refactor`.
 
-`PromptTemplate` shape at `prompt-templates.ts:11-19`:
+`PromptTemplate` shape at `core/prompt-templates.ts:11-19`:
 
 ```ts
 {
@@ -27,11 +27,11 @@ The basename (minus `.md`) becomes the template name. So `~/.pi/agent/prompts/re
 
 ## Discovery and loading
 
-`loadPromptTemplates(options)` at `prompt-templates.ts:208-281`. Order:
+`loadPromptTemplates(options)` at `core/prompt-templates.ts:208-281`. Order:
 
-1. **Global first** — `<agentDir>/prompts/` (`prompt-templates.ts:249`).
-2. **Project second** — `<cwd>/.pi/prompts/` (`prompt-templates.ts:250`).
-3. **CLI paths last** — explicit `promptPaths` from `--prompt-template` (`prompt-templates.ts:255-274`).
+1. **Global first** — `<agentDir>/prompts/` (`core/prompt-templates.ts:249`).
+2. **Project second** — `<cwd>/.pi/prompts/` (`core/prompt-templates.ts:250`).
+3. **CLI paths last** — explicit `promptPaths` from `--prompt-template` (`core/prompt-templates.ts:255-274`).
 
 Both directory and file paths are accepted in CLI args. Directories are walked one level for `*.md`. Note the precedence is **global-first** — opposite of skills (which are user-first) and SYSTEM.md (project-first). See **pi-architecture** `reference/discovery-paths.md` for the full per-resource precedence matrix.
 
@@ -39,21 +39,21 @@ Both directory and file paths are accepted in CLI args. Directories are walked o
 
 ## Expansion — `expandPromptTemplate`
 
-`expandPromptTemplate(text, templates)` at `prompt-templates.ts:269-285`:
+`expandPromptTemplate(text, templates)` at `core/prompt-templates.ts:269-285`:
 
 1. Short-circuit if input does not start with `/` (`:270`).
 2. Split name from args with a **regex**, not a space scan: `text.match(/^\/([^\s]+)(?:\s+([\s\S]*))?$/)` (`:272`); `templateName = match[1]`, `argsString = match[2] ?? ""` (`:275-276`). A non-matching string is returned unchanged (`:273`).
-3. `args = parseCommandArgs(argsString)` (`:280`) — bash-style argument parsing with double-quote and single-quote support (`prompt-templates.ts:24-55`).
+3. `args = parseCommandArgs(argsString)` (`:280`) — bash-style argument parsing with double-quote and single-quote support (`core/prompt-templates.ts:24-55`).
 4. `return substituteArgs(template.content, args)` (`:281`).
 5. If no template matches, return the original `text` unchanged (`:284`).
 
-> Corrected 2026-08-13 (gap-scan error pass). The previous revision described step 2 as `templateName = text.slice(1, spaceIndex)` and cited lines 283 through 295. Neither held: the regex form was already in place at `v0.82.1` (`prompt-templates.ts:272`) and every one of those line numbers was past EOF (the file is 285 lines). The claim survived a drift-only re-anchor because it was an *error*, not drift — confidence on the old text: none; on the text above: **high** (read at `v0.84.1`).
+> Corrected 2026-08-13 (gap-scan error pass). The previous revision described step 2 as `templateName = text.slice(1, spaceIndex)` and cited lines 283 through 295. Neither held: the regex form was already in place at `v0.82.1` (`core/prompt-templates.ts:272`) and every one of those line numbers was past EOF (the file is 285 lines). The claim survived a drift-only re-anchor because it was an *error*, not drift — confidence on the old text: none; on the text above: **high** (read at `v0.84.1`).
 
 This means **template lookup is silent** — `/foo` with no matching template just stays as `/foo`. Skill commands (`/skill:name`) take a different path; the order in `agent-session.ts` is "skill expand → template expand" (see below).
 
 ## Argument substitution — `substituteArgs`
 
-`substituteArgs(content, args)` at `prompt-templates.ts:69-104`. Five replacement patterns, applied in this order:
+`substituteArgs(content, args)` at `core/prompt-templates.ts:69-104`. Five replacement patterns, applied in this order:
 
 1. **`$1`, `$2`, ...** — positional args, 1-indexed (`:73-76`).
 2. **`${@:start:length}`** — bash-style slicing, 1-indexed start (`:81-91`). `${@:2}` = "from arg 2 onwards joined by spaces". `${@:2:3}` = "3 args starting from arg 2 joined".

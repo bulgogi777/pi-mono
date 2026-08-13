@@ -8,9 +8,9 @@ JSONL with **LF-only** record delimiters. Documented at `packages/coding-agent/d
 
 Rules:
 
-- One JSON value per line. `serializeJsonLine` (`jsonl.ts:10-12`) is just `JSON.stringify(value) + "\n"`.
-- Split incoming records on `\n` only. Strip an optional trailing `\r` per record (`jsonl.ts:25-27`).
-- **Do not use Node `readline`.** Documented at `jsonl.ts:13-21`: readline splits on additional Unicode separators (notably U+2028 and U+2029) which are valid inside JSON strings. Using readline corrupts payloads silently the moment an LLM emits a paragraph separator. Use `attachJsonlLineReader` from `jsonl.ts:21-58`, or replicate its loop (UTF-8 decoder + `indexOf("\n")` + buffer remainder).
+- One JSON value per line. `serializeJsonLine` (`rpc/jsonl.ts:10-12`) is just `JSON.stringify(value) + "\n"`.
+- Split incoming records on `\n` only. Strip an optional trailing `\r` per record (`rpc/jsonl.ts:25-27`).
+- **Do not use Node `readline`.** Documented at `rpc/jsonl.ts:13-21`: readline splits on additional Unicode separators (notably U+2028 and U+2029) which are valid inside JSON strings. Using readline corrupts payloads silently the moment an LLM emits a paragraph separator. Use `attachJsonlLineReader` from `rpc/jsonl.ts:21-58`, or replicate its loop (UTF-8 decoder + `indexOf("\n")` + buffer remainder).
 
 Direction:
 - **Stdin** carries `RpcCommand` and `RpcExtensionUIResponse` JSON lines from the host into pi.
