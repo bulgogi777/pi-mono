@@ -123,6 +123,13 @@ done
 >
 > **Under-specified cites are a FINDING, not a lookup.** `bun .pi/scripts/qualify-cites.ts <pin> --apply` rewrites any cite whose basename admits several files to its minimal unique path suffix. Do this *before* a re-anchor. Resolving such a cite by picking the likeliest file manufactures a confident-wrong anchor that the next pass preserves — and for `packages/agent/src/harness/` vs `packages/coding-agent/src/core/` (354 identical lines between the two `compaction.ts` files at v0.84.1) **no content matcher can ever discriminate**, because the rival candidates hold the same text. The tool therefore carries no basename hint table by design.
 
+> **Correcting a DATED log entry — the three conditions.** `.pi/kb/` is scan-only and is never rewritten mechanically (see the qualification note above). But a dated entry that states a *wrong* cite is not history worth preserving, so a hand correction is permitted — and **only** under all three of:
+> 1. **Independently verified against source** at the pin the entry claims. Not re-derived from the entry's own prose.
+> 2. **Marked inline as a correction**, dated, in the entry itself — not silently, and not only in a commit message.
+> 3. **The original value stays legible.** Write what the entry said as well as what is true, so a later reader can tell a correction from a rewrite.
+>
+> **Mechanical rewrite of a log is never permitted**, with or without these conditions. Precedent (2026-08-13): two cites inside the `2026-08-12` entry were corrected this way — `rpc-mode.ts:466`/`:486` → `:469`/`:487`, and `:557-577` → `:559-580` (the old start sat on a section-banner comment). Both carry the original value inline. The rule exists because the same run *refused* to let a script touch those files: without it written down, the next reader sees an edited log and cannot tell which rule was in force.
+
 > **Enumerations: measure, do not assert.** `.pi/scripts/recount-enumerations.sh [pin]` re-derives every "N of these" figure the kb states and prints the command beside each, so the closing numbers are checkable by someone who was not there.
 
 > `reanchor-cites.ts` content-matches with **context-window widening** (a lone `}` matches everywhere; widen ±1→30 lines and require one survivor) and treats all of `.pi/kb/` as scan-only, since those files cite the pin of their own entry. `verify-symbol-cites.ts` is the pass-2 tool: it checks that a cite naming a symbol actually lands on that symbol's declaration — it found **102 of 145** symbol/cite pairs wrong on its first run, none of which any drift pass could see. Both refuse to guess: a class name cited far from its declaration, or a symbol declared more than once in a file, is flagged and left alone.
