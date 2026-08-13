@@ -109,7 +109,21 @@ done
 > 1. **Drift pass** (bulk, mechanical) — content-match every cite to its new line.
 > 2. **Error pass** (targeted, per claim) — for the load-bearing claims, open the anchor and confirm it still says what the prose asserts. An in-bounds cite is not a correct cite.
 >
-> Also re-count enumerations against source every scan — they rot silently and no cite check catches them. The `KnownProvider` table sat at "28 providers" while the union had **38** (2026-07-26), and the provider catalog had drifted 27→36 unnoticed before that.
+> Also re-count enumerations against source every scan — they rot silently and no cite check catches them. The `KnownProvider` table sat at "28 providers" while the union had **38** (2026-07-26), then read 38 while the union had **40** (2026-08-13); the provider catalog had drifted 27→36 unnoticed before either. Same scan: `ExtensionAPI.on()` overloads 27→30, `providers/anthropic.ts` "18-line shell" → 59 lines, `rpc-types.ts` 264→289, `rpc-mode.ts` 754→817.
+
+> **BOTH PASSES ARE SCRIPTED — run them, do not redo them by hand** (built 2026-08-13, workitem `85e1053b`):
+>
+> ```bash
+> bun .pi/scripts/reanchor-cites.ts <old-tag> <new-tag>            # pass 1, dry run: three buckets
+> bun .pi/scripts/reanchor-cites.ts <old-tag> <new-tag> --apply    # rewrite only the MATCHED bucket
+> bun .pi/scripts/reanchor-cites.ts <new-tag> <new-tag>            # positive control: must show 0 rewrites
+> bun .pi/scripts/verify-symbol-cites.ts <new-tag>                 # pass 2: symbol vs cite
+> bun .pi/scripts/verify-symbol-cites.ts <new-tag> --fix           # correct the unambiguous ones
+> ```
+>
+> `reanchor-cites.ts` content-matches with **context-window widening** (a lone `}` matches everywhere; widen ±1→30 lines and require one survivor) and treats all of `.pi/kb/` as scan-only, since those files cite the pin of their own entry. `verify-symbol-cites.ts` is the pass-2 tool: it checks that a cite naming a symbol actually lands on that symbol's declaration — it found **102 of 145** symbol/cite pairs wrong on its first run, none of which any drift pass could see. Both refuse to guess: a class name cited far from its declaration, or a symbol declared more than once in a file, is flagged and left alone.
+>
+> **A descending range (`file.ts:969-967`) is the visible fingerprint of the old arithmetic method** — start and end mapped independently, end landing before start. Ten were still in the kb, created by the previous pass. Grep for them after any bulk cite edit.
 
 ### Post-upgrade verification (run BEFORE bumping the pin — any failure ⇒ rollback, do not pin)
 

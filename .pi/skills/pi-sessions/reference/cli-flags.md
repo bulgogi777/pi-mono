@@ -1,6 +1,6 @@
 # Session-related CLI Flags
 
-CLI flags that select, create, or fork sessions, plus the storage-directory override. All cites against pi-mono `HEAD`. Parser: `parseArgs` at `packages/coding-agent/src/cli/args.ts:79-100`. Dispatch: `createSessionManager` at `packages/coding-agent/src/main.ts:215-286`.
+CLI flags that select, create, or fork sessions, plus the storage-directory override. All cites against pi-mono at the current pin (`v0.84.1`, `53fa77cc`). Parser: `parseArgs` at `packages/coding-agent/src/cli/args.ts:65-226`. Dispatch: `createSessionManager` at `packages/coding-agent/src/main.ts:311-382`.
 
 This file covers **session flags only**. For resource flags (`--skill`, `--prompt-template`, `--system-prompt`, `--no-context-files`, etc.), see **pi-architecture** `reference/cli-flags.md`. For provider/model flags, see **pi-providers** `reference/cli-flags.md`.
 
@@ -8,29 +8,29 @@ This file covers **session flags only**. For resource flags (`--skill`, `--promp
 
 | Flag | Short | Args | Lines | Effect |
 |---|---|---|---|---|
-| `--continue` | `-c` | — | `args.ts:79-80` | Resume the most recent session for the current cwd, or create a new one if none exists. |
-| `--resume` | `-r` | — | `args.ts:81-82` | Open an interactive picker (`/resume`-style UI) listing recent sessions, then load the chosen file. |
-| `--session <path\|id>` | — | required | `args.ts:96-97` | Open a specific session by absolute path or partial UUID. If the resolved session lives in another project, prompts to fork. |
-| `--fork <path\|id>` | — | required | `args.ts:98-99` | Fork the named session into a **new file** in the current cwd's session dir. |
-| `--no-session` | — | — | `args.ts:94-95` | No file persistence. Ephemeral in-memory session only. |
-| `--session-dir <dir>` | — | required | `args.ts:100-101` | Override the default session storage directory for this run. |
+| `--continue` | `-c` | — | `args.ts:81-82` | Resume the most recent session for the current cwd, or create a new one if none exists. |
+| `--resume` | `-r` | — | `args.ts:83-84` | Open an interactive picker (`/resume`-style UI) listing recent sessions, then load the chosen file. |
+| `--session <path\|id>` | — | required | `args.ts:98-99` | Open a specific session by absolute path or partial UUID. If the resolved session lives in another project, prompts to fork. |
+| `--fork <path\|id>` | — | required | `args.ts:100-101` | Fork the named session into a **new file** in the current cwd's session dir. |
+| `--no-session` | — | — | `args.ts:96-97` | No file persistence. Ephemeral in-memory session only. |
+| `--session-dir <dir>` | — | required | `args.ts:102-103` | Override the default session storage directory for this run. |
 
-## Dispatch table — `createSessionManager` (`main.ts:215-286`)
+## Dispatch table — `createSessionManager` (`main.ts:311-382`)
 
 The flag-to-`SessionManager` mapping:
 
 | Flag(s) set | Code | Result |
 |---|---|---|
-| `--no-session` | `main.ts:222-224` | `SessionManager.inMemory()` |
-| `--fork <id>` | `main.ts:225-238` | `forkSessionOrExit(resolved.path, cwd, sessionDir)` → `SessionManager.forkFrom` (new file with `parentSession` link in header) |
-| `--session <id>` | `main.ts:240-266` | `SessionManager.open(resolved.path, sessionDir)`. If resolved as `"global"` (different project), prompts to fork; user-cancel → exit 0 |
-| `--resume` | `main.ts:268-281` | Interactive picker via `selectSession`, then `SessionManager.open(selectedPath, sessionDir)` |
-| `--continue` | `main.ts:283-285` | `SessionManager.continueRecent(cwd, sessionDir)` (most recent or new) |
-| (none of above) | `main.ts:285` | `SessionManager.create(cwd, sessionDir)` |
+| `--no-session` | `main.ts:318-320` | `SessionManager.inMemory()` |
+| `--fork <id>` | `main.ts:321-334` | `forkSessionOrExit(resolved.path, cwd, sessionDir)` → `SessionManager.forkFrom` (new file with `parentSession` link in header) |
+| `--session <id>` | `main.ts:336-362` | `SessionManager.open(resolved.path, sessionDir)`. If resolved as `"global"` (different project), prompts to fork; user-cancel → exit 0 |
+| `--resume` | `main.ts:364-377` | Interactive picker via `selectSession`, then `SessionManager.open(selectedPath, sessionDir)` |
+| `--continue` | `main.ts:379-381` | `SessionManager.continueRecent(cwd, sessionDir)` (most recent or new) |
+| (none of above) | `main.ts:381` | `SessionManager.create(cwd, sessionDir)` |
 
 ## Mutual exclusion — `--fork` cannot combine
 
-`main.ts:189-202`: when `--fork` is supplied alongside any of `--continue`, `--resume`, `--session`, or `--no-session`, pi prints an error listing the conflicting flags and exits with code 1.
+`main.ts:285-298`: when `--fork` is supplied alongside any of `--continue`, `--resume`, `--session`, or `--no-session`, pi prints an error listing the conflicting flags and exits with code 1.
 
 The other combinations are handled by precedence — the dispatch table above is in `if`/`if`/`if` order, so the **first matching branch wins**:
 
@@ -45,7 +45,7 @@ In practice, no other combinations conflict because `createSessionManager` short
 
 ## Session resolution — `resolveSessionPath`
 
-`--session` and `--fork` accept either an **absolute path** or a **partial UUID**. The resolver classifies the result (`main.ts:231, 244`):
+`--session` and `--fork` accept either an **absolute path** or a **partial UUID**. The resolver classifies the result (`main.ts:327, 244`):
 
 | Resolution type | What it means |
 |---|---|
@@ -54,11 +54,11 @@ In practice, no other combinations conflict because `createSessionManager` short
 | `"global"` | Resolved to a session in a **different** cwd's directory (cross-project). For `--session`, prompts to fork. For `--fork`, used as-is. |
 | `"not_found"` | No matching session. Pi exits 1 with `No session found matching '<arg>'`. |
 
-The cross-project prompt (`main.ts:249-249`) is interactive (`promptConfirm`). Hosts using `--session <global-id>` non-interactively need to anticipate this — either supply the absolute path explicitly or use `--fork` instead.
+The cross-project prompt (`main.ts:345-345`) is interactive (`promptConfirm`). Hosts using `--session <global-id>` non-interactively need to anticipate this — either supply the absolute path explicitly or use `--fork` instead.
 
 ## `--session-dir <dir>`
 
-Overrides the default `~/.pi/agent/sessions/--<encoded-cwd>--/` directory for both **storing new sessions** and **looking up** existing ones via `--continue` / `--resume`. Threaded as the `sessionDir` argument to every static factory (`main.ts:205-208, 222, 232, …`). Equivalent to setting `PI_CODING_AGENT_SESSION_DIR` in the env (`config.ts:381`).
+Overrides the default `~/.pi/agent/sessions/--<encoded-cwd>--/` directory for both **storing new sessions** and **looking up** existing ones via `--continue` / `--resume`. Threaded as the `sessionDir` argument to every static factory (`main.ts:301-304, 222, 232, …`). Equivalent to setting `PI_CODING_AGENT_SESSION_DIR` in the env (`config.ts:381`).
 
 When this flag is set, `--continue` looks for the most recent session **inside the override directory**, not the cwd-encoded default.
 
@@ -77,7 +77,7 @@ So `pi -c` in a cwd with no prior sessions silently creates a new one rather tha
 
 ### `--resume` semantics
 
-`main.ts:268-281` runs the picker UI. The picker enumerates **two** lists:
+`main.ts:364-377` runs the picker UI. The picker enumerates **two** lists:
 
 - Sessions for the current cwd: `SessionManager.list(cwd, sessionDir, onProgress)`.
 - All sessions across all projects: `SessionManager.listAll(onProgress)`.
@@ -104,7 +104,7 @@ This is **different** from in-place `branch()` (which moves the leaf pointer wit
 - **`--no-session` doesn't suppress events.** The agent still emits the full event stream (RPC `prompt`, `message_*`, etc.), just nothing persists. Useful for ephemeral integrations.
 - **`--session-dir` does NOT migrate existing sessions.** It only redirects lookups and writes for the current run. Sessions previously written to the default directory remain there.
 - **Partial-UUID matches are by prefix.** A short ID like `8a3c` matches the first session whose UUID starts with `8a3c`. If multiple sessions share the prefix (rare), the resolver picks one deterministically — but to be safe, pass enough characters to uniquely identify.
-- **Fork conflicts with `--no-session`.** Documented at `main.ts:189-202`. There is no in-memory fork.
+- **Fork conflicts with `--no-session`.** Documented at `main.ts:285-298`. There is no in-memory fork.
 
 ## Cross-references
 

@@ -1,6 +1,6 @@
 # RPC Protocol
 
-The full wire-protocol reference for `pi --mode rpc`. All cites against pi-mono `HEAD` on the date this file was written. The wire schema is defined in **one** file: `packages/coding-agent/src/modes/rpc/rpc-types.ts` (264 lines, the entire union of every command, response, event, and extension-UI message). The dispatcher is `packages/coding-agent/src/modes/rpc/rpc-mode.ts` (754 lines). The framer is `jsonl.ts` (58 lines). Canonical doc: `packages/coding-agent/docs/rpc.md`.
+The full wire-protocol reference for `pi --mode rpc`. All cites against pi-mono at the current pin (`v0.84.1`, `53fa77cc`). The wire schema is defined in **one** file: `packages/coding-agent/src/modes/rpc/rpc-types.ts` (289 lines at `v0.84.1`, the entire union of every command, response, event, and extension-UI message). The dispatcher is `packages/coding-agent/src/modes/rpc/rpc-mode.ts` (817 lines). The framer is `jsonl.ts` (58 lines). Canonical doc: `packages/coding-agent/docs/rpc.md`.
 
 ## Framing
 
@@ -14,7 +14,7 @@ Rules:
 
 Direction:
 - **Stdin** carries `RpcCommand` and `RpcExtensionUIResponse` JSON lines from the host into pi.
-- **Stdout** carries `RpcResponse`, the `AgentSessionEvent` stream, and `RpcExtensionUIRequest` JSON lines from pi back to the host. Pi's stdout is "taken over" by `takeOverStdout()` at `rpc-mode.ts:49` so accidental `console.log` from extensions is captured and re-routed (otherwise it would corrupt the JSONL stream). See **Stdout-as-capability** below for the mechanism.
+- **Stdout** carries `RpcResponse`, the `AgentSessionEvent` stream, and `RpcExtensionUIRequest` JSON lines from pi back to the host. Pi's stdout is "taken over" by `takeOverStdout()` at `rpc-mode.ts:50` so accidental `console.log` from extensions is captured and re-routed (otherwise it would corrupt the JSONL stream). See **Stdout-as-capability** below for the mechanism.
 
 ## Stdout-as-capability (the output-guard discipline)
 
@@ -22,8 +22,8 @@ The RPC framer doesn't *ask* code to behave on stdout — it makes ambient stdou
 
 1. `takeOverStdout()` (`output-guard.ts:9-34`) captures the real `process.stdout.write` into a held reference (`rawStdoutWrite`, line 14).
 2. It then **replaces `process.stdout.write` itself** with a shim (lines 18-27) that routes every byte to `rawStderrWrite` instead. After this call, `process.stdout.write(...)` from anywhere — `console.log`, ink, transitive deps, Node runtime warnings — physically lands on stderr.
-3. The captured reference is held inside the module's `stdoutTakeoverState`. The only public path back to the true fd1 is `writeRawStdout(text)` (`output-guard.ts:49-55`), which `rpc-mode.ts` wraps in `output(obj) -> writeRawStdout(serializeJsonLine(obj))` at `rpc-mode.ts:53-55`. That `output` is the sole legitimate producer of framed records on the wire.
-4. `takeOverStdout()` is engaged at `rpc-mode.ts:49`, the first line of `runRpcMode`, before any extension or session code runs.
+3. The captured reference is held inside the module's `stdoutTakeoverState`. The only public path back to the true fd1 is `writeRawStdout(text)` (`output-guard.ts:49-55`), which `rpc-mode.ts` wraps in `output(obj) -> writeRawStdout(serializeJsonLine(obj))` at `rpc-mode.ts:54-56`. That `output` is the sole legitimate producer of framed records on the wire.
+4. `takeOverStdout()` is engaged at `rpc-mode.ts:50`, the first line of `runRpcMode`, before any extension or session code runs.
 
 Why it's built this way: "route diagnostics to stderr" as a convention is unenforceable across transitive deps, ink redraws, and runtime warnings. The output-guard makes the protocol channel a **single-owner capability** rather than an ambient resource — prevention-by-construction. Framing (LF-only JSONL above) protects a clean channel; it does not rescue a contaminated one.
 
@@ -37,17 +37,17 @@ Events (the `AgentSessionEvent` stream — see below) **never** carry an `id`. T
 
 ## RpcCommand catalog
 
-The discriminated union is `RpcCommand` at `rpc-types.ts:19-71`. Per-command handler dispatch is the `switch (command.type)` block in `rpc-mode.ts:handleCommand` (`rpc-mode.ts:374-707`). The grouping below mirrors the type file; `Lines` points to the type-union variant in `rpc-types.ts`; `Handler` points to the case body in `rpc-mode.ts`.
+The discriminated union is `RpcCommand` at `rpc-types.ts:19-71`. Per-command handler dispatch is the `switch (command.type)` block in `rpc-mode.ts:handleCommand` (`rpc-mode.ts:375-723`). The grouping below mirrors the type file; `Lines` points to the type-union variant in `rpc-types.ts`; `Handler` points to the case body in `rpc-mode.ts`.
 
 ### Prompting (responses are async)
 
 | `type` | Args | Lines | Handler | Response data | Notes |
 |---|---|---|---|---|---|
-| `prompt` | `message`, `images?`, `streamingBehavior?` | `:21` | `rpc-mode.ts:379-401` | (no `data`) | Authoritative `success: true` is emitted only after the prompt **preflight** succeeds (`rpc-mode.ts:382-396`). If the agent is already streaming and `streamingBehavior` is missing, fails. |
-| `steer` | `message`, `images?` | `:22` | `rpc-mode.ts:403-407` | — | Queue while streaming, delivered after the current assistant turn finishes its tool calls, before the next LLM call. Skill / template expansion runs; extension commands rejected. |
-| `follow_up` | `message`, `images?` | `:23` | `rpc-mode.ts:408-412` | — | Queue until the agent is fully idle, then deliver. |
-| `abort` | — | `:24` | `rpc-mode.ts:413-417` | — | Cancels the running agent (sets the abort signal). Does not wait for completion. |
-| `new_session` | `parentSession?` | `:25` | `rpc-mode.ts:418-430` | `{ cancelled: boolean }` | Cancellable via `session_before_switch` hook. `cancelled: true` means an extension vetoed. |
+| `prompt` | `message`, `images?`, `streamingBehavior?` | `:21` | `rpc-mode.ts:380-402` | (no `data`) | Authoritative `success: true` is emitted only after the prompt **preflight** succeeds (`rpc-mode.ts:383-397`). If the agent is already streaming and `streamingBehavior` is missing, fails. |
+| `steer` | `message`, `images?` | `:22` | `rpc-mode.ts:404-408` | — | Queue while streaming, delivered after the current assistant turn finishes its tool calls, before the next LLM call. Skill / template expansion runs; extension commands rejected. |
+| `follow_up` | `message`, `images?` | `:23` | `rpc-mode.ts:409-413` | — | Queue until the agent is fully idle, then deliver. |
+| `abort` | — | `:24` | `rpc-mode.ts:414-418` | — | Cancels the running agent (sets the abort signal). Does not wait for completion. |
+| `new_session` | `parentSession?` | `:25` | `rpc-mode.ts:419-431` | `{ cancelled: boolean }` | Cancellable via `session_before_switch` hook. `cancelled: true` means an extension vetoed. |
 
 ### Streaming behavior
 
@@ -57,71 +57,71 @@ The discriminated union is `RpcCommand` at `rpc-types.ts:19-71`. Per-command han
 
 | `type` | Lines | Handler | Response data |
 |---|---|---|---|
-| `get_state` | `:28` | `rpc-mode.ts:431-452` | `RpcSessionState` (`rpc-types.ts:89-104`): `model`, `thinkingLevel`, `isStreaming`, `isCompacting`, `steeringMode`, `followUpMode`, `sessionFile`, `sessionId`, `sessionName`, `autoCompactionEnabled`, `messageCount`, `pendingMessageCount`. |
-| `get_messages` | `:67` | `rpc-mode.ts:620-627` | `{ messages: AgentMessage[] }` |
-| `get_session_stats` | `:55` | `rpc-mode.ts:558-563` | `SessionStats` (`agent-session.ts`) |
-| `get_last_assistant_text` | `:62` | `rpc-mode.ts:602-606` | `{ text: string \| null }` |
-| `get_fork_messages` | `:61` | `rpc-mode.ts:589-601` | `{ messages: Array<{ entryId, text }> }` — for fork-target picker UIs. |
-| `get_commands` | `:69` | `rpc-mode.ts:628-…` | `{ commands: RpcSlashCommand[] }` (`rpc-types.ts:79-87`) |
-| `get_available_models` | `:32` | `rpc-mode.ts:471-479` | `{ models: Model<any>[] }` |
+| `get_state` | `:28` | `rpc-mode.ts:432-453` | `RpcSessionState` (`rpc-types.ts:95-108`): `model`, `thinkingLevel`, `isStreaming`, `isCompacting`, `steeringMode`, `followUpMode`, `sessionFile`, `sessionId`, `sessionName`, `autoCompactionEnabled`, `messageCount`, `pendingMessageCount`. |
+| `get_messages` | `:67` | `rpc-mode.ts:636-643` | `{ messages: AgentMessage[] }` |
+| `get_session_stats` | `:56` | `rpc-mode.ts:559-579` | `SessionStats` (`agent-session.ts`) |
+| `get_last_assistant_text` | `:63` | `rpc-mode.ts:618-622` | `{ text: string \| null }` |
+| `get_fork_messages` | `:62` | `rpc-mode.ts:605-617` | `{ messages: Array<{ entryId, text }> }` — for fork-target picker UIs. |
+| `get_commands` | `:70` | `rpc-mode.ts:644-…` | `{ commands: RpcSlashCommand[] }` (`rpc-types.ts:79-87`) |
+| `get_available_models` | `:32` | `rpc-mode.ts:472-480` | `{ models: Model<any>[] }` |
 
 ### Model / thinking
 
 | `type` | Args | Lines | Handler | Response |
 |---|---|---|---|---|
-| `set_model` | `provider`, `modelId` | `:31` | `rpc-mode.ts:453-462` | `data: Model<any>` |
-| `cycle_model` | — | `:33` | `rpc-mode.ts:463-470` | `data: { model, thinkingLevel, isScoped } \| null` |
-| `set_thinking_level` | `level: ThinkingLevel` | `:36` | `rpc-mode.ts:480-484` | (no `data`) |
-| `cycle_thinking_level` | — | `:37` | `rpc-mode.ts:485-496` | `data: { level } \| null` |
+| `set_model` | `provider`, `modelId` | `:32` | `rpc-mode.ts:454-463` | `data: Model<any>` |
+| `cycle_model` | — | `:34` | `rpc-mode.ts:464-471` | `data: { model, thinkingLevel, isScoped } \| null` |
+| `set_thinking_level` | `level: ThinkingLevel` | `:37` | `rpc-mode.ts:481-485` | (no `data`) |
+| `cycle_thinking_level` | — | `:38` | `rpc-mode.ts:486-497` | `data: { level } \| null` |
 
 ### Queue modes
 
 | `type` | Args | Lines | Handler |
 |---|---|---|---|
-| `set_steering_mode` | `mode: "all" \| "one-at-a-time"` | `:40` | `rpc-mode.ts:497-501` |
-| `set_follow_up_mode` | `mode: "all" \| "one-at-a-time"` | `:41` | `rpc-mode.ts:502-512` |
+| `set_steering_mode` | `mode: "all" \| "one-at-a-time"` | `:41` | `rpc-mode.ts:498-502` |
+| `set_follow_up_mode` | `mode: "all" \| "one-at-a-time"` | `:42` | `rpc-mode.ts:503-513` |
 
 ### Compaction / retry
 
 | `type` | Args | Lines | Handler | Response |
 |---|---|---|---|---|
-| `compact` | `customInstructions?` | `:44` | `rpc-mode.ts:516-521` | `data: CompactionResult` |
-| `set_auto_compaction` | `enabled: boolean` | `:45` | `rpc-mode.ts:521-530` | — |
-| `set_auto_retry` | `enabled: boolean` | `:48` | `rpc-mode.ts:530-535` | — |
-| `abort_retry` | — | `:49` | `rpc-mode.ts:535-544` | — |
+| `compact` | `customInstructions?` | `:45` | `rpc-mode.ts:517-522` | `data: CompactionResult` |
+| `set_auto_compaction` | `enabled: boolean` | `:46` | `rpc-mode.ts:522-531` | — |
+| `set_auto_retry` | `enabled: boolean` | `:49` | `rpc-mode.ts:531-536` | — |
+| `abort_retry` | — | `:50` | `rpc-mode.ts:536-545` | — |
 
 ### Bash
 
 | `type` | Args | Lines | Handler | Response |
 |---|---|---|---|---|
-| `bash` | `command: string` | `:52` | `rpc-mode.ts:544-549` | `data: BashResult` |
-| `abort_bash` | — | `:53` | `rpc-mode.ts:549-558` | — |
+| `bash` | `command: string` | `:53` | `rpc-mode.ts:545-550` | `data: BashResult` |
+| `abort_bash` | — | `:54` | `rpc-mode.ts:550-559` | — |
 
 ### Session manipulation
 
 | `type` | Args | Lines | Handler | Response |
 |---|---|---|---|---|
-| `export_html` | `outputPath?` | `:56` | `rpc-mode.ts:552-568` | `data: { path: string }` |
-| `switch_session` | `sessionPath: string` | `:57` | `rpc-mode.ts:564-576` | `data: { cancelled: boolean }` — cancellable via `session_before_switch` |
-| `fork` | `entryId: string` | `:58` | `rpc-mode.ts:577-585` | `data: { text: string; cancelled: boolean }` — cancellable via `session_before_fork` |
-| `clone` | — | `:59` | `rpc-mode.ts:585-588` | `data: { cancelled: boolean }` |
-| `set_session_name` | `name: string` | `:63` | `rpc-mode.ts:595-619` | — |
+| `export_html` | `outputPath?` | `:57` | `rpc-mode.ts:553-584` | `data: { path: string }` |
+| `switch_session` | `sessionPath: string` | `:58` | `rpc-mode.ts:580-592` | `data: { cancelled: boolean }` — cancellable via `session_before_switch` |
+| `fork` | `entryId: string` | `:59` | `rpc-mode.ts:593-601` | `data: { text: string; cancelled: boolean }` — cancellable via `session_before_fork` |
+| `clone` | — | `:60` | `rpc-mode.ts:601-604` | `data: { cancelled: boolean }` |
+| `set_session_name` | `name: string` | `:64` | `rpc-mode.ts:611-635` | — |
 
 `fork` performs an in-place leaf-move-plus-summary inside the same `.jsonl`. The new-file `forkFrom` operation lives behind `--fork` at startup, not behind this RPC command — see **pi-sessions** for the in-place-vs-new-file distinction.
 
 ### Generic error response
 
-Any command can fail with `{ id, type: "response", command, success: false, error: string }` (`rpc-types.ts:110+`). Parse failures (malformed JSON line) come back with `command: "parse"` (`rpc.md:1190-1198`).
+Any command can fail with `{ id, type: "response", command, success: false, error: string }` (`rpc-types.ts:110+`). Parse failures (malformed JSON line) come back with `command: "parse"` (`rpc.md:1191-1199`).
 
 ## Event stream
 
-Pi emits the `AgentSessionEvent` union (`packages/coding-agent/src/core/agent-session.ts:139-181`, also documented at `packages/coding-agent/docs/json.md:11-21`). It composes the base `AgentEvent` from `packages/agent/src/types.ts:420` plus pi-coding-agent-specific events. Events have no `id` field.
+Pi emits the `AgentSessionEvent` union (`packages/coding-agent/src/core/agent-session.ts:141-183`, also documented at `packages/coding-agent/docs/json.md:11-21`). It composes the base `AgentEvent` from `packages/agent/src/types.ts:426` plus pi-coding-agent-specific events. Events have no `id` field.
 
 | Event `type` | Payload | Emitted when |
 |---|---|---|
 | `agent_start` | — | Agent begins processing a prompt. |
-| `agent_end` | `messages: AgentMessage[]`, `willRetry: boolean` | The agent loop finished a run. `willRetry: true` means an auto-compaction/retry will re-enter the loop, so this is **not** terminal. Payload gained `willRetry` in 0.80.x (`agent-session.ts:142-145`; predicate `_willRetryAfterAgentEnd` at `:647`, terminal `stopReason !== "stop"` at `:1966`). |
-| `agent_settled` | — | **New in 0.80.x** (`agent-session.ts:146`). Emitted once, *after* the final `agent_end`, when the loop has fully drained (steering + follow-up queues empty, no retry pending). Emitted at `agent-session.ts:584-585` via `_emitAgentSettled()` (`:1059`). This — not `agent_end` — is what `RpcClient.waitForIdle()` now resolves on. |
+| `agent_end` | `messages: AgentMessage[]`, `willRetry: boolean` | The agent loop finished a run. `willRetry: true` means an auto-compaction/retry will re-enter the loop, so this is **not** terminal. Payload gained `willRetry` in 0.80.x (`agent-session.ts:144-147`; predicate `_willRetryAfterAgentEnd` at `:662`, terminal `stopReason !== "stop"` at `:1975`). |
+| `agent_settled` | — | **New in 0.80.x** (`agent-session.ts:148`). Emitted once, *after* the final `agent_end`, when the loop has fully drained (steering + follow-up queues empty, no retry pending). Emitted at `agent-session.ts:599-600` via `_emitAgentSettled()` (`:1061`). This — not `agent_end` — is what `RpcClient.waitForIdle()` now resolves on. |
 | `turn_start` | — | Each turn begins (one assistant response + its tool results). |
 | `turn_end` | `message: AgentMessage`, `toolResults: ToolResultMessage[]` | Each turn completes. |
 | `message_start` | `message: AgentMessage` | Any message (user / assistant / toolResult) begins. |
@@ -135,7 +135,7 @@ Pi emits the `AgentSessionEvent` union (`packages/coding-agent/src/core/agent-se
 | `compaction_end` | `reason`, `result?: CompactionResult`, `aborted: boolean`, `willRetry: boolean`, `errorMessage?: string` | Compaction completes (or fails). |
 | `auto_retry_start` | `attempt`, `maxAttempts`, `delayMs`, `errorMessage` | After a transient provider error. |
 | `auto_retry_end` | `success: boolean`, `attempt: number`, `finalError?: string` | Retry resolved (success or final failure). |
-| `extension_error` | `extensionPath: string`, `event: string`, `error: string` | An extension threw inside a hook. Emitted from `rpc-mode.ts:347-348` via the `onError` callback. |
+| `extension_error` | `extensionPath: string`, `event: string`, `error: string` | An extension threw inside a hook. Emitted from `rpc-mode.ts:348-349` via the `onError` callback. |
 
 ### `assistantMessageEvent` delta types
 
