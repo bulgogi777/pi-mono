@@ -121,6 +121,10 @@ done
 > bun .pi/scripts/verify-symbol-cites.ts <new-tag> --fix           # correct the unambiguous ones
 > ```
 >
+> **Under-specified cites are a FINDING, not a lookup.** `bun .pi/scripts/qualify-cites.ts <pin> --apply` rewrites any cite whose basename admits several files to its minimal unique path suffix. Do this *before* a re-anchor. Resolving such a cite by picking the likeliest file manufactures a confident-wrong anchor that the next pass preserves — and for `packages/agent/src/harness/` vs `packages/coding-agent/src/core/` (354 identical lines between the two `compaction.ts` files at v0.84.1) **no content matcher can ever discriminate**, because the rival candidates hold the same text. The tool therefore carries no basename hint table by design.
+
+> **Enumerations: measure, do not assert.** `.pi/scripts/recount-enumerations.sh [pin]` re-derives every "N of these" figure the kb states and prints the command beside each, so the closing numbers are checkable by someone who was not there.
+
 > `reanchor-cites.ts` content-matches with **context-window widening** (a lone `}` matches everywhere; widen ±1→30 lines and require one survivor) and treats all of `.pi/kb/` as scan-only, since those files cite the pin of their own entry. `verify-symbol-cites.ts` is the pass-2 tool: it checks that a cite naming a symbol actually lands on that symbol's declaration — it found **102 of 145** symbol/cite pairs wrong on its first run, none of which any drift pass could see. Both refuse to guess: a class name cited far from its declaration, or a symbol declared more than once in a file, is flagged and left alone.
 >
 > **A descending range (`file.ts:969-967`) is the visible fingerprint of the old arithmetic method** — start and end mapped independently, end landing before start. Ten were still in the kb, created by the previous pass. Grep for them after any bulk cite edit.

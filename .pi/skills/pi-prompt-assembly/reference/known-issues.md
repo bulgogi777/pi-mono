@@ -23,8 +23,8 @@ Once any of these holds, the issue goes away:
 
 `buildSystemPrompt` chooses between two complete code paths:
 
-- **customPrompt branch** (`system-prompt.ts:46-72`): `customPrompt` body verbatim → APPEND_SYSTEM → `<project_context>` XML block wrapping AGENTS.md (`:54-61`; pre-0.75.0 this was a `# Project Context` Markdown heading) → skills (gated on `read` tool, `:65`) → cwd (the `Current date:` line was removed in 0.80.x). No auto-generated preamble, no auto-tools list, no auto-guidelines.
-- **default-prompt branch** (`system-prompt.ts:74-161`): hard-coded `"You are an expert coding assistant…"` preamble (`:121-138`) → `Available tools:` table (filtered by `toolSnippets`, `:82-84`) → auto-derived `Guidelines:` block (built `:87-119`, rendered `:128-129`) → Pi documentation block with absolute paths (`:131-138`) → APPEND_SYSTEM (`:140-142`) → `<project_context>` XML block (`:145-152`) → skills gate (`:155`) → cwd (`:159`; no date line since 0.80.x).
+- **customPrompt branch** (`core/system-prompt.ts:46-72`): `customPrompt` body verbatim → APPEND_SYSTEM → `<project_context>` XML block wrapping AGENTS.md (`:54-61`; pre-0.75.0 this was a `# Project Context` Markdown heading) → skills (gated on `read` tool, `:65`) → cwd (the `Current date:` line was removed in 0.80.x). No auto-generated preamble, no auto-tools list, no auto-guidelines.
+- **default-prompt branch** (`core/system-prompt.ts:74-161`): hard-coded `"You are an expert coding assistant…"` preamble (`:121-138`) → `Available tools:` table (filtered by `toolSnippets`, `:82-84`) → auto-derived `Guidelines:` block (built `:87-119`, rendered `:128-129`) → Pi documentation block with absolute paths (`:131-138`) → APPEND_SYSTEM (`:140-142`) → `<project_context>` XML block (`:145-152`) → skills gate (`:155`) → cwd (`:159`; no date line since 0.80.x).
 
 The default branch is much longer. Section ordering is identical from APPEND_SYSTEM onward; the difference is the preamble + tools + guidelines + docs that prepends.
 
@@ -70,7 +70,7 @@ Project-specific instructions and guidelines:\n\n
 </project_context>\n
 ```
 
-CustomPrompt branch: `system-prompt.ts:60-67`. Default branch: `system-prompt.ts:153-161`. Both emit identical wrapping; the only behavioral difference between branches remains the auto-generated preamble/tools/guidelines/Pi-docs that the default branch prepends.
+CustomPrompt branch: `core/system-prompt.ts:60-67`. Default branch: `core/system-prompt.ts:153-161`. Both emit identical wrapping; the only behavioral difference between branches remains the auto-generated preamble/tools/guidelines/Pi-docs that the default branch prepends.
 
 Kb material that referenced the old `# Project Context` / `## <abs-path>` shape was corrected in the 2026-05-23 `self-update` (see `.pi/kb/version-log.md`).
 
@@ -82,7 +82,7 @@ A caller passes `selectedTools: []` (no tools at all), and the skills section va
 
 ### Cause
 
-In the **default-prompt branch**, the skills gate is `hasRead = tools.includes("read")` at `system-prompt.ts:110`, evaluated against the `selectedTools || ["read", "bash", "edit", "write"]` default at `:90`. With explicit `selectedTools: []`, `tools` is `[]`, `hasRead` is `false`, and the skills section at `:197` is skipped.
+In the **default-prompt branch**, the skills gate is `hasRead = tools.includes("read")` at `core/system-prompt.ts:110`, evaluated against the `selectedTools || ["read", "bash", "edit", "write"]` default at `:90`. With explicit `selectedTools: []`, `tools` is `[]`, `hasRead` is `false`, and the skills section at `:197` is skipped.
 
 In the **customPrompt branch**, the gate is `customPromptHasRead = !selectedTools || selectedTools.includes("read")` at `:71`. The `!selectedTools` short-circuit means `undefined` lets skills through, but explicit `[]` still blocks them.
 
@@ -106,7 +106,7 @@ Pre-0.80.x: the first request after midnight local time produced a full `cacheWr
 
 ### Status
 
-**Resolved.** The `Current date:` line was removed from the system prompt entirely in 0.80.x (commit `f4e9ca74`, fixes #6621). `buildSystemPrompt` now ends at `\nCurrent working directory:` (`system-prompt.ts:69` customPrompt branch, `:159` default) with no date, so this daily cache invalidation no longer occurs. If a host needs the model to know the date, it must inject it itself (e.g. via a per-prompt context block), which keeps it out of the cached system prefix.
+**Resolved.** The `Current date:` line was removed from the system prompt entirely in 0.80.x (commit `f4e9ca74`, fixes #6621). `buildSystemPrompt` now ends at `\nCurrent working directory:` (`core/system-prompt.ts:69` customPrompt branch, `:159` default) with no date, so this daily cache invalidation no longer occurs. If a host needs the model to know the date, it must inject it itself (e.g. via a per-prompt context block), which keeps it out of the cached system prefix.
 
 ### Workaround
 
