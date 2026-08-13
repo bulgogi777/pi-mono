@@ -1,6 +1,6 @@
 # JSONL Format
 
-The on-disk session file is JSON Lines: one JSON object per line. The first line is a `SessionHeader`; every subsequent line is a `SessionEntry`. Entries form a tree via `id` / `parentId`. All cites against `packages/coding-agent/src/core/session-manager.ts` at pi-mono `HEAD` on the date this file was written. Reference doc with prose: `packages/coding-agent/docs/session-format.md`.
+The on-disk session file is JSON Lines: one JSON object per line. The first line is a `SessionHeader`; every subsequent line is a `SessionEntry`. Entries form a tree via `id` / `parentId`. All cites against `packages/coding-agent/src/core/session-manager.ts` at the current pin (`v0.84.1`, `53fa77cc`). Reference doc with prose: `packages/coding-agent/docs/session-format.md`.
 
 ## Header (line 1)
 
@@ -9,7 +9,7 @@ The on-disk session file is JSON Lines: one JSON object per line. The first line
 | Field | Type | Notes |
 |---|---|---|
 | `type` | `"session"` | Literal discriminator. |
-| `version` | `number?` | `CURRENT_SESSION_VERSION = 3` (`session-manager.ts:28`). v1 (linear), v2 (tree), v3 (renamed `hookMessage`→`custom`). Auto-migrated on load by `migrateSessionEntries` (`session-manager.ts:283`). v1 has no field. |
+| `version` | `number?` | `CURRENT_SESSION_VERSION = 3` (`session-manager.ts:28`). v1 (linear), v2 (tree), v3 (renamed `hookMessage`→`custom`). Auto-migrated on load by `migrateSessionEntries` (`session-manager.ts:294`). v1 has no field. |
 | `id` | `string` | Session UUID. |
 | `timestamp` | `string` | ISO timestamp of session creation. |
 | `cwd` | `string` | Working directory at session start. Used by `getMissingSessionCwdIssue` to detect the "stored cwd no longer exists" condition (`session-cwd.ts:14-30`). |
@@ -71,7 +71,7 @@ The tree is in-place: a single `.jsonl` file holds all branches. Switching betwe
 
 ## File location and naming
 
-`getDefaultSessionDir(cwd, agentDir)` at `session-manager.ts:432-430` encodes cwd as `--<cwd-with-slashes-and-colons-replaced-by-hyphens>--` under `<agentDir>/sessions/`:
+`getDefaultSessionDir(cwd, agentDir)` at `session-manager.ts:483-489` encodes cwd as `--<cwd-with-slashes-and-colons-replaced-by-hyphens>--` under `<agentDir>/sessions/`:
 
 ```
 ~/.pi/agent/sessions/--Users-bogie-code-pi-mono--/2024-12-03T14-00-00-000Z_8a3c5f1e.jsonl
@@ -82,7 +82,7 @@ The session-file basename is `<iso-timestamp-with-: and . replaced by ->_<sessio
 ## Cross-references
 
 - Static factories that produce a `SessionManager` instance (`create`, `open`, `continueRecent`, `inMemory`, `forkFrom`, `list`, `listAll`) — see `reference/branching-resume.md` for which CLI flag invokes which.
-- `parseSessionEntries` at `session-manager.ts:288-303` — parses raw file content into `FileEntry[]`, skipping malformed lines silently.
-- `loadEntriesFromFile` at `session-manager.ts:442-423` — same plus header validation (rejects files whose first entry is not a `type: "session"` with a string `id`).
-- `findMostRecentSession` at `session-manager.ts:485` — used by `--continue` (`SessionManager.continueRecent`) to pick the latest `*.jsonl` in the directory by mtime.
-- Migration logic for v1 / v2 → v3: `migrateSessionEntries` at `session-manager.ts:283` (renames `hookMessage`→`custom`, fills in tree links for legacy linear sessions).
+- `parseSessionEntries` at `session-manager.ts:299-314` — parses raw file content into `FileEntry[]`, skipping malformed lines silently.
+- `loadEntriesFromFile` at `session-manager.ts:514-556` — same plus header validation (rejects files whose first entry is not a `type: "session"` with a string `id`).
+- `findMostRecentSession` at `session-manager.ts:635` — used by `--continue` (`SessionManager.continueRecent`) to pick the latest `*.jsonl` in the directory by mtime.
+- Migration logic for v1 / v2 → v3: `migrateSessionEntries` at `session-manager.ts:294` (renames `hookMessage`→`custom`, fills in tree links for legacy linear sessions).

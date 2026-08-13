@@ -37,7 +37,7 @@ For Ollama, only the model `id` is required:
 
 ### Full provider entry
 
-`ProviderConfigInput` shape at `packages/coding-agent/src/core/provider-composer.ts:44-68` (moved out of `model-registry.ts` by `9993c969`, v0.80.8; still re-exported from `model-registry.ts:5` for compatibility):
+`ProviderConfigInput` shape at `packages/coding-agent/src/core/provider-composer.ts:46-71` (moved out of `model-registry.ts` by `9993c969`, v0.80.8; still re-exported from `model-registry.ts:16` for compatibility):
 
 ```ts
 {
@@ -70,11 +70,11 @@ Fields are optional in `models.json` because pi falls back to sensible defaults 
 
 ### Per-model `baseUrl` (fixed in v0.72.0)
 
-Before v0.72.0, `pi.registerProvider()` and `models.json` ignored per-model `baseUrl` fields, always falling back to the provider-level `baseUrl`. Fixed in `provider-composer.ts` (relocated from `model-registry.ts:886` by `9993c969`, v0.80.8) — `definition.baseUrl ?? providerConfig.baseUrl ?? defaults?.baseUrl` at `:136` for the `models.json` path and `:218` for the `pi.registerProvider()` path ([#4063](https://github.com/badlogic/pi-mono/issues/4063)). After upgrade, models with their own `baseUrl` route there as expected.
+Before v0.72.0, `pi.registerProvider()` and `models.json` ignored per-model `baseUrl` fields, always falling back to the provider-level `baseUrl`. Fixed in `provider-composer.ts` (relocated from `model-registry.ts:886` **as of the pre-v0.80.8 tree** — that path no longer exists at the current pin; moved by `9993c969`) — `definition.baseUrl ?? providerConfig.baseUrl ?? defaults?.baseUrl` at `:142` for the `models.json` path and `definition.baseUrl ?? config.baseUrl ?? defaults?.baseUrl` at `:225` for the `pi.registerProvider()` path ([#4063](https://github.com/badlogic/pi-mono/issues/4063)). After upgrade, models with their own `baseUrl` route there as expected.
 
 ### thinking levels: `thinkingLevelMap` (added v0.72.0, replaces `reasoningEffortMap`)
 
-v0.72.0 introduced model-level thinking-level metadata. Type at `packages/ai/src/types.ts:54`:
+v0.72.0 introduced model-level thinking-level metadata. Type at `packages/ai/src/types.ts:55`:
 
 ```ts
 type ThinkingLevelMap = Partial<Record<ModelThinkingLevel, string | null>>;
@@ -104,7 +104,7 @@ Migration from `compat.reasoningEffortMap` (removed):
 }
 ```
 
-The field moves from `model.compat.reasoningEffortMap` to **top-level** `model.thinkingLevelMap`. Map values keep the same provider-specific string semantics; `null` is the new way to mark a level unsupported. See `packages/ai/CHANGELOG.md` v0.72.0 for the canonical migration note and `packages/ai/src/models.ts:50-79` for the `getSupportedThinkingLevels()` and `clampThinkingLevel()` helpers that now consume this metadata.
+The field moves from `model.compat.reasoningEffortMap` to **top-level** `model.thinkingLevelMap`. Map values keep the same provider-specific string semantics; `null` is the new way to mark a level unsupported. See `packages/ai/CHANGELOG.md` v0.72.0 for the canonical migration note and `packages/ai/src/models.ts:70-101` for the `getSupportedThinkingLevels()` and `clampThinkingLevel()` helpers that now consume this metadata.
 
 `supportsXhigh()` was also removed in the same release. Use `getSupportedThinkingLevels(model).includes("xhigh")` or `clampThinkingLevel(model, requested)` instead.
 
@@ -133,11 +133,11 @@ When set at provider level, applies to all models in that provider. Per-model ov
 
 ### `compat.forceAdaptiveThinking` (Anthropic-compatible endpoints)
 
-`forceAdaptiveThinking?: boolean` (`packages/ai/src/types.ts:625`, default `false`). Anthropic-compatible providers set it to `true` for any model whose upstream **requires** the adaptive thinking format; set it to `false` to opt out on an overridden built-in model.
+`forceAdaptiveThinking?: boolean` (`packages/ai/src/types.ts:661`, default `false`). Anthropic-compatible providers set it to `true` for any model whose upstream **requires** the adaptive thinking format; set it to `false` to opt out on an overridden built-in model.
 
 You rarely set this by hand for first-party Anthropic models — the catalog generator applies it automatically for adaptive-thinking families (`packages/ai/scripts/generate-models.ts`, the `isAnthropicAdaptiveThinkingModel` list). `claude-opus-5` ships with `forceAdaptiveThinking: true`, `supportsTemperature: false`, `thinkingLevelMap {xhigh, max}`. It matters when you point a custom provider at an Anthropic-compatible gateway (Xiaomi MiMo, a BYOK proxy): if the upstream expects the adaptive format and the model entry doesn't declare it, thinking requests fail or silently degrade.
 
-Neighbouring compat flags on the same type: `allowEmptySignature` (`:627` — replay empty thinking signatures as `signature: ""` rather than converting thinking to text) and `supportsStrictTools` (`:629` — Anthropic strict tool schemas; generated Anthropic models enable it explicitly).
+Neighbouring compat flags on the same type: `allowEmptySignature` (`:663` — replay empty thinking signatures as `signature: ""` rather than converting thinking to text) and `supportsStrictTools` (`:665` — Anthropic strict tool schemas; generated Anthropic models enable it explicitly).
 
 ### Overriding built-in providers
 
@@ -179,12 +179,12 @@ Each model can override `baseUrl`, `api`, `headers`, and `compat`. Useful when o
 
 ## Auth resolution for custom providers
 
-For both `models.json` and `pi.registerProvider` registrations, the API key flows through the same resolution path as built-ins — `ModelRuntime.getAuth(providerId)` (`model-runtime.ts:374-376`) → `composeApiKeyAuth` (`provider-composer.ts:293`). (Pre-v0.80.8 this was `AuthStorage.getApiKey`, now removed.) Precedence — re-derived at v0.82.1, full table in `reference/auth-resolution.md`:
+For both `models.json` and `pi.registerProvider` registrations, the API key flows through the same resolution path as built-ins — `ModelRuntime.getAuth(providerId)` (`model-runtime.ts:470-472`) → `composeApiKeyAuth` (`provider-composer.ts:301`). (Pre-v0.80.8 this was `AuthStorage.getApiKey`, now removed.) Precedence — re-derived at v0.82.1, full table in `reference/auth-resolution.md`:
 
 1. **Runtime override** (`--api-key`, `pi.setApiKey`)
 2. **`auth.json` API-key entry** keyed by `providerId`
 3. **`auth.json` OAuth entry** keyed by `providerId`
-4. **Environment variable** — but custom providers are **not in `env-api-keys.ts:108-120`**, so this step returns nothing for them
+4. **Environment variable** — but custom providers are **not in `env-api-keys.ts:110-122`**, so this step returns nothing for them
 5. **Custom resolver fallback** — this is where `models.json`'s `apiKey` field surfaces
 
 Step 5 is implemented as a `fallbackResolver` callback registered by the model registry. The `apiKey` string in `models.json` is interpreted via `resolveConfigValue` (in `core/resolve-config-value.ts`), which supports the same three forms as `auth.json`:
