@@ -37,8 +37,8 @@ Citations: `<sha>` for commit; `<file>:<line>` against the **new pin** (unless o
 - `packages/coding-agent/src/core/extensions/types.ts` +36/−3. The three removed lines are two comments plus one signature: `refreshToken(credentials)` → `refreshToken(credentials, signal)`, which lands only on config-form OAuth providers. Everything apex-app's extensions use is untouched. Confirmed empirically: chat-eng bumped apex-app's devDep 0.82.1 → 0.84.1 and `bun run typecheck` exited 0 on both configs.
 
 **Smaller RPC-surface changes (medium)**
-- `rpc-mode.ts:466`, `:486` — `set_model` / `get_available_models` now use `modelRuntime.getAvailableSnapshot()` (sync) instead of `await getAvailable()`. Shape unchanged; a cold session may return a smaller catalog until the refresh lands. Degraded, not broken; no measurement that it bites in practice.
-- `rpc-mode.ts:557-577` — the `bash` command now fires an extension `user_bash` event first and can be answered without executing.
+- `rpc-mode.ts:469`, `:487` — `set_model` / `get_available_models` now use `modelRuntime.getAvailableSnapshot()` (sync) instead of `await getAvailable()`. *(cite corrected 2026-08-13 gap-scan: the entry as written said `:466`/`:486`; the call sites are `:469`/`:487`.)* Shape unchanged; a cold session may return a smaller catalog until the refresh lands. Degraded, not broken; no measurement that it bites in practice.
+- `rpc-mode.ts:559-580` — the `bash` command now fires an extension `user_bash` event first (`:560-565`) and can be answered without executing (`:567-572`). *(cite corrected 2026-08-13 gap-scan: the entry as written said `:557-577`, which starts on the section banner comment.)*
 - `AI_AGENT=pi` added to CLI and RPC child-process environments (#7493).
 
 ### The downstream trap: a data-loss FIX upstream that reads as a regression
@@ -79,8 +79,72 @@ Gate 6 is implemented as `~/apex/efforts/pi-code/scripts/gate-wire-shape.ts` —
 
 ### Still stale / flagged
 
-- **Full cite re-anchor NOT done in this run.** Measured: **38 of 53** fully-qualified cited files in `.pi/skills` + `.pi/kb` changed across `v0.82.1..v0.84.1`. Per the standing method note, that is a **two-pass gap-scan** (drift pass by content match, then a targeted error pass) and it is deliberately scoped as separate follow-on work rather than expanded into this upgrade.
-- **Two cited files are already dead and survived the last gap-scan:** `packages/ai/src/anthropic.ts` and `packages/ai/src/utils/oauth/anthropic.ts`. Both were casualties of the 0.80.x provider re-architecture. Consistent with the standing finding that content-matching fixes *drift*, not *errors*.
+- ~~**Full cite re-anchor NOT done in this run.**~~ — **CLEARED 2026-08-13** by the two-pass gap-scan below (workitem `85e1053b`).
+- ~~**Two cited files are already dead and survived the last gap-scan**~~ — **CLEARED**: `packages/ai/src/anthropic.ts` and `packages/ai/src/utils/oauth/anthropic.ts` appear nowhere in `.pi/skills` as live cites. Both survive only inside explicit *“relocated from X to Y”* prose, which is the correct form per `convention-citation-rules.md` (cite both when a file moved). Verified: the replacement paths exist at the pin — `packages/ai/src/auth/oauth/anthropic.ts` (364 lines) and `packages/ai/src/api/anthropic-messages.ts`.
+
+---
+
+## 2026-08-13 — gap-scan: two-pass cite re-anchor onto v0.84.1
+
+> Workitem `85e1053b`. No pin change — this is the follow-on to the 2026-08-12 upgrade, run against the same pin `53fa77cc` (`v0.84.1`). Both passes are now **scripted and kept**: `.pi/scripts/reanchor-cites.ts` (drift) and `.pi/scripts/verify-symbol-cites.ts` (error). Re-run both at every pin bump.
+
+### Scope measured
+
+1,398 `file:line` cites across 39 docs. Split: **1,178 live** (`.pi/skills/**`) and **220 historical** (all of `.pi/kb/` — scan-only, see below).
+
+### Pass 1 — DRIFT (mechanical, content match)
+
+`bun .pi/scripts/reanchor-cites.ts v0.82.1 v0.84.1 --apply`. For each cite, take the exact text of the cited line at the OLD pin and locate it at the NEW pin. Never diff arithmetic.
+
+| Bucket | Count | Disposition |
+|---|---|---|
+| MATCHED | 1,108 | 802 rewritten, 306 already correct |
+| AMBIGUOUS | 39 | all resolved by hand — none guessed |
+| NOT FOUND | 25 | all re-derived against `v0.84.1` source |
+
+**Positive control (high):** running the tool with `old-pin == new-pin` yields 0 rewrites and 0 drift. The 802 rewrites are therefore measured movement, not tool artifact — a green run is not a run that never checked.
+
+Two techniques were needed beyond naive line matching, both still pure content matching and verifiable per cite:
+- **Context-window disambiguation.** A cited line is often not unique (`}`, `*/`, a blank). Widen a window (±1,2,3,5,8,12,20,30 lines) around it and require exactly one survivor. Without this, 430 cites were unresolvable.
+- **Whole-block identity** for range ends: when the start anchors uniquely and the entire cited block is byte-identical at the new location, the end is proven by that equality.
+
+### Pass 2 — ERROR (per claim, against source)
+
+Content matching fixes drift, not errors: a cite that was already wrong is faithfully carried to a *new* wrong line and passes pass 1 clean. `verify-symbol-cites.ts` checks that wherever the kb writes `` `Symbol` … `file.ts:N` ``, N actually lands on `Symbol`'s declaration.
+
+**Result: 102 of 145 symbol/cite pairs were pointing outside the declaration they name.** 93 auto-corrected from source, 9 by hand. Now 3 — all three verified by hand as deliberate in-body anchors (a class name cited at a method inside it), which the tool flags and refuses to “correct”.
+
+Findings worth keeping:
+
+- **The previous re-anchor pass CREATED inverted ranges.** `3dccd9b0c` rewrote `resource-loader.ts:965-977` → `:969-967` — start and end mapped independently by arithmetic, end landing *before* start. Ten such descending ranges were still in the kb (`:983-981`, `types.ts:959-956`, `runner.ts:749-738`, `sdk.ts:87-85`, `session-manager.ts:432-430`, …). A descending range is the visible signature of the arithmetic method and is worth grepping for after any bulk edit.
+- **`pi-extensions/reference/hook-events.md` was citing an obsolete layout wholesale.** `MessageStartEvent` cited `types.ts:670` while sitting at `:737` at `v0.82.1` and `:743` at `v0.84.1`; likewise `MessageEndEvent` (`:679` → actually `:756`), `ExtensionEvent` (`:959` → `:1034`), `MessageEndEventResult` (`:1021` → `:1097`). In-bounds every time, wrong every time, and invisible to a drift pass.
+- **`pi-prompt-assembly/reference/prompt-templates.md` described a mechanism that does not exist.** It documented step 2 of `expandPromptTemplate` as `text.slice(1, spaceIndex)`; the source has used a regex (`:272`) since before `v0.82.1`, and all five cited lines were past EOF. Prose corrected in place with a visible correction note.
+- **Eight cites were past EOF at the OLD pin** — provably wrong *before* this bump, independent of it (the same-pin control run reports them with no version change involved).
+
+### Enumeration re-count (nothing catches these but counting)
+
+| Claim | Was | Is at `v0.84.1` |
+|---|---|---|
+| `KnownProvider` union | 38 | **40** (`baseten`, `qwen-token-plan-individual` accrued since `v0.82.1`) — `packages/ai/src/types.ts:35-74` |
+| `ExtensionAPI.on()` overloads | 27 | **30** (`types.ts:1203-1244`); the `ExtensionEvent` union is **25** — fewer, because `ToolCallEvent`/`ToolResultEvent` are each themselves unions |
+| `providers/anthropic.ts` “provider shell” | 18 lines | **59 lines** (3 docs repeated the stale figure) |
+| `rpc-types.ts` | 264 lines | **289** |
+| `rpc-mode.ts` | 754 lines | **817** |
+| `jsonl.ts` | 58 lines | 58 — unchanged |
+| `SessionEntry` entry types | 9 | 9 — unchanged |
+
+### Why `.pi/kb/` is scan-only
+
+`version-log.md` and `consolidation-log.md` cite the pin of their own entry, and `sources.md` deliberately mixes: its *Current pin* paragraph is already written against the new pin, its *Prior pin* paragraphs against old ones, and its method notes quote historical cite failures verbatim as worked examples. Mechanically rewriting any of that falsifies the record, so `reanchor-cites.ts` excludes the whole directory and reports it separately. Two factual cite errors inside the `2026-08-12` entry were corrected by hand and marked inline.
+
+### Also done
+
+- Every skill's pin declaration re-stated to `v0.84.1` / `53fa77cc`. Nine files still claimed `v0.82.1` / `b4f29368` and `hook-events.md` still claimed `v0.79.10` / `8e190066`; five more said only “against pi-mono `HEAD`”, which is not a citable anchor.
+- `discovery-paths.md`'s hedge (“some general discovery cites may carry small drift from earlier pins”) removed — no longer true, and a standing hedge is how a known-stale cite becomes permanent.
+
+### kb / skill files updated in this run
+
+34 files under `.pi/skills/` (all six territorial skills), `.pi/kb/version-log.md` (this entry + two cite corrections), and two new scripts under `.pi/scripts/`.
 
 ---
 

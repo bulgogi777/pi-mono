@@ -26,7 +26,7 @@ Pi RPC mode reference: protocol shape, command catalog, event stream, and the ex
 
 - `reference/protocol.md` — strict JSONL framing rules (LF-only, U+2028/U+2029 hazards), full RpcCommand catalog with arg/return shapes and source-line cites, full event catalog including `assistantMessageEvent` delta types. Cites `rpc-types.ts`, `rpc-mode.ts`, `jsonl.ts`, and the canonical doc at `packages/coding-agent/docs/rpc.md`.
 - `reference/extension-ui-bridge.md` — the request/response sub-protocol for extension UI in RPC mode. Tabulates each method (`select`, `confirm`, `input`, `editor`, `notify`, `setStatus`, `setWidget`, `setTitle`, `set_editor_text`) by dialog-vs-fire-and-forget, response shape, and timeout-resolves-to-default semantics. The canonical "why does my extension hang in RPC?" reference.
-- `reference/sdk-embedding.md` — in-process `createAgentSession` / `AgentSession` (`sdk.ts:38-85, 193-...`) vs subprocess `RpcClient` (`rpc-client.ts:54-524`): decision matrix, lifecycle (`start` / `stop` / `send` / `handleLine`), 30-second request timeout, request-id correlation via `pendingRequests`, when to pick which.
+- `reference/sdk-embedding.md` — in-process `createAgentSession` / `AgentSession` (`sdk.ts:38-85, 193-...`) vs subprocess `RpcClient` (`rpc-client.ts:55-525`): decision matrix, lifecycle (`start` / `stop` / `send` / `handleLine`), 30-second request timeout, request-id correlation via `pendingRequests`, when to pick which.
 - `reference/json-mode.md` — the one-shot `pi --mode json "<prompt>"` variant. Same `AgentSessionEvent` stream as RPC (header line first, then events) but no command channel and no extension UI bridge. Implemented in `print-mode.ts:103-118` alongside `--mode text`.
 
 ## Quick start when asked

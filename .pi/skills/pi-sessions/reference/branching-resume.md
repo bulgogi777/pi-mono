@@ -1,20 +1,20 @@
 # Branching, Resume, and Fork
 
-How pi turns CLI flags and runtime commands into `SessionManager` instances, how the entry tree branches in place, and the difference between branching and forking. All cites against pi-mono `HEAD` on the date this file was written.
+How pi turns CLI flags and runtime commands into `SessionManager` instances, how the entry tree branches in place, and the difference between branching and forking. All cites against pi-mono at the current pin (`v0.84.1`, `53fa77cc`).
 
 ## CLI flag → SessionManager dispatch
 
-All flag parsing in `packages/coding-agent/src/cli/args.ts:79-100`. All dispatch in `packages/coding-agent/src/main.ts:createSessionManager` (`:214-285`).
+All flag parsing in `packages/coding-agent/src/cli/args.ts:81-102`. All dispatch in `packages/coding-agent/src/main.ts:createSessionManager` (`:230-309`).
 
 | CLI flag | Parsed at | SessionManager call | Result |
 |---|---|---|---|
-| (none) | — | `SessionManager.create(cwd, sessionDir)` (`main.ts:285`) | Brand-new session file under `~/.pi/agent/sessions/<encoded-cwd>/`. |
-| `--continue` / `-c` | `args.ts:79` | `SessionManager.continueRecent(cwd, sessionDir)` (`main.ts:283`) | Most recent `*.jsonl` in the cwd's session dir, by mtime (`session-manager.ts:1367-1375`, helper `findMostRecentSession` at `:481`). Falls back to `create` semantics if none exist. |
-| `--resume` / `-r` | `args.ts:81` | Interactive picker → `SessionManager.open(selectedPath, sessionDir)` (`main.ts:268-275`) | Opens the `selectSession` UI (themed; `initTheme` / `stopThemeWatcher` wrap the call). User picks; selection is opened with the session file's parent dir as the implicit `sessionDir`. |
-| `--session <path-or-id>` | `args.ts:96` | Resolved by `resolveSessionPath`. If `path` / `local` → `SessionManager.open` (`main.ts:246`); if `global` (found in another project) → user prompted to fork via `forkSessionOrExit` (`main.ts:256-259`); if `not_found` → exit 1 (`main.ts:265`). | Opens an existing session by exact path or short ID. Cross-project finds trigger an interactive fork prompt. |
-| `--fork <path-or-id>` | `args.ts:98` | `forkSessionOrExit(resolved.path, cwd, sessionDir)` → `SessionManager.forkFrom` (`main.ts:205-213, 232`) | Creates a **new file** in the current cwd's session dir, preserving full source history. Conflicts checked at `main.ts:189-202` — `--fork` cannot combine with `--continue`, `--resume`, `--session`, or `--no-session`. |
-| `--no-session` | `args.ts:94` | `SessionManager.inMemory()` (`main.ts:224`) | No file persistence. State lives only in process memory. |
-| `--session-dir <path>` | `args.ts:100` | Threaded as the `sessionDir` arg to whichever factory above runs. | Overrides the default `~/.pi/agent/sessions/<encoded-cwd>/` root for this run. |
+| (none) | — | `SessionManager.create(cwd, sessionDir)` (`main.ts:381`) | Brand-new session file under `~/.pi/agent/sessions/<encoded-cwd>/`. |
+| `--continue` / `-c` | `args.ts:81` | `SessionManager.continueRecent(cwd, sessionDir)` (`main.ts:379`) | Most recent `*.jsonl` in the cwd's session dir, by mtime (`session-manager.ts:1367-1375`, helper `findMostRecentSession` at `:481`). Falls back to `create` semantics if none exist. |
+| `--resume` / `-r` | `args.ts:83` | Interactive picker → `SessionManager.open(selectedPath, sessionDir)` (`main.ts:364-371`) | Opens the `selectSession` UI (themed; `initTheme` / `stopThemeWatcher` wrap the call). User picks; selection is opened with the session file's parent dir as the implicit `sessionDir`. |
+| `--session <path-or-id>` | `args.ts:98` | Resolved by `resolveSessionPath`. If `path` / `local` → `SessionManager.open` (`main.ts:342`); if `global` (found in another project) → user prompted to fork via `forkSessionOrExit` (`main.ts:352-355`); if `not_found` → exit 1 (`main.ts:361`). | Opens an existing session by exact path or short ID. Cross-project finds trigger an interactive fork prompt. |
+| `--fork <path-or-id>` | `args.ts:100` | `forkSessionOrExit(resolved.path, cwd, sessionDir)` → `SessionManager.forkFrom` (`main.ts:301-309, 232`) | Creates a **new file** in the current cwd's session dir, preserving full source history. Conflicts checked at `main.ts:285-298` — `--fork` cannot combine with `--continue`, `--resume`, `--session`, or `--no-session`. |
+| `--no-session` | `args.ts:96` | `SessionManager.inMemory()` (`main.ts:320`) | No file persistence. State lives only in process memory. |
+| `--session-dir <path>` | `args.ts:102` | Threaded as the `sessionDir` arg to whichever factory above runs. | Overrides the default `~/.pi/agent/sessions/<encoded-cwd>/` root for this run. |
 
 ## Static factories — what each one does
 
@@ -79,7 +79,7 @@ Lexicographic sort across the directory is therefore chronological, which is wha
 
 ## Resume semantics in detail
 
-`--resume` calls `SessionManager.list(cwd, sessionDir)` to enumerate sessions for the current project, plus `SessionManager.listAll` for cross-project visibility (`main.ts:270-274`). The returned `SessionInfo` shape (`session-manager.ts:166-185`) carries:
+`--resume` calls `SessionManager.list(cwd, sessionDir)` to enumerate sessions for the current project, plus `SessionManager.listAll` for cross-project visibility (`main.ts:366-370`). The returned `SessionInfo` shape (`session-manager.ts:174-188`) carries:
 
 - `path`, `id`, `cwd`, optional `name`, optional `parentSessionPath` (so the picker can show fork lineage)
 - `created`, `modified`, `messageCount`
@@ -89,7 +89,7 @@ Lexicographic sort across the directory is therefore chronological, which is wha
 
 ## Cross-references
 
-- Stored-cwd-no-longer-exists handling: `session-cwd.ts:14-58`. Surfaces as `MissingSessionCwdError` when an opened session's header `cwd` is gone; `main.ts:511` recovers by re-opening with `cwdOverride`.
+- Stored-cwd-no-longer-exists handling: `session-cwd.ts:14-58`. Surfaces as `MissingSessionCwdError` when an opened session's header `cwd` is gone; `main.ts:611` recovers by re-opening with `cwdOverride`.
 - `SessionManager.open` signature accepts `cwdOverride` precisely for the recovery case.
 - Compaction-related branching (`session_before_compact` cancellation, `compactionResult` overrides) is documented in `reference/compaction.md` (TBW).
 - The hook events that fire around these flows (`session_before_switch`, `session_before_fork`, `session_start`, `session_shutdown`) are catalogued in **pi-extensions**' `reference/hook-events.md`.
