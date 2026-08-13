@@ -21,7 +21,7 @@ xiaomi-token-plan-cn, xiaomi-token-plan-sgp, zai, zai-coding-cn
 
 `xiaomi` was added in **v0.72.0** (Xiaomi MiMo Token Plan, Anthropic-compatible).
 
-`ProviderId` (`types.ts:76`) widens this to `KnownProvider | string` so extensions can register custom IDs (see `pi.registerProvider`).
+`ProviderId` (`extensions/types.ts:76`) widens this to `KnownProvider | string` so extensions can register custom IDs (see `pi.registerProvider`).
 
 ## Per-provider auth and env vars
 

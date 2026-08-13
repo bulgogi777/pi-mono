@@ -99,7 +99,7 @@ Class `RpcClient` at `packages/coding-agent/src/modes/rpc/rpc-client.ts:56-593`.
 1. Build argv: `["--mode", "rpc"]` + `--provider` + `--model` + caller-supplied `args`.
 2. `spawn("node", [cliPath, ...args], { cwd, env, stdio: ["pipe", "pipe", "pipe"] })` (`:89-93`).
 3. Pipe stderr to host's stderr (also collected for debugging via `getStderr()` at `:156`).
-4. Attach the **strict** JSONL line reader to stdout via `attachJsonlLineReader` (`jsonl.ts:21-58`). **Note**: the reader is LF-only and explicitly avoids Node `readline` (which splits on U+2028 / U+2029). See **pi-rpc** `reference/protocol.md` framing section.
+4. Attach the **strict** JSONL line reader to stdout via `attachJsonlLineReader` (`rpc/jsonl.ts:21-58`). **Note**: the reader is LF-only and explicitly avoids Node `readline` (which splits on U+2028 / U+2029). See **pi-rpc** `reference/protocol.md` framing section.
 5. Wait 100ms for the process to come up; if it has already exited, throw with the collected stderr.
 
 `stop()` at `:115-139`:

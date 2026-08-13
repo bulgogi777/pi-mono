@@ -146,6 +146,27 @@ Findings worth keeping:
 
 34 files under `.pi/skills/` (all six territorial skills), `.pi/kb/version-log.md` (this entry + two cite corrections), and two new scripts under `.pi/scripts/`.
 
+### Follow-up the same day — under-specified cites eliminated at the source
+
+Peer review (`session-olive`) pushed back on resolving ambiguous cites at all: *a basename admitting many candidates is not a puzzle, it is an under-specified cite, and picking the likeliest file manufactures a confident-wrong anchor the next pass will faithfully preserve.* Correct, and the measurement backed it — **of 100 cites the re-anchor tool resolved through its reviewed `BASENAME_HINTS` table, only 57 were independently unique across the full candidate set. The table was carrying the other 43.**
+
+But the stricter rule alone cannot finish the job, and the reason is worth recording: **`packages/agent/src/harness/` holds near-duplicates of `packages/coding-agent/src/core/`** — 354 identical lines between the two `compaction.ts` files at `v0.84.1`. When rival candidates contain the *same text*, no content matcher can ever discriminate, so a "one survivor across the full candidate set" rule would mark those cites permanently unresolvable rather than fix them.
+
+So the ambiguity was removed from the **documents** instead of resolved in the tool:
+
+- New `.pi/scripts/qualify-cites.ts` rewrote **206 under-specified cites** to their minimal unique path suffix (`types.ts:` → `extensions/types.ts:`, `compaction.ts:` → `core/compaction/compaction.ts:`). Minimal, not fully-qualified: short enough to stay readable in a table, long enough that no tool has to guess. It **lengthens only** — shortening an already-qualified path would destroy information for a human reader to buy nothing for the tools. The 8 it refused to resolve were done by hand after reading the prose.
+- **`BASENAME_HINTS` is deleted from `reanchor-cites.ts`.** Verified by removing it and re-running: **1,177 matched / 0 ambiguous, unchanged**. The table was load-bearing before the qualification pass and is dead weight after it. Do not add it back — an ambiguous cite is now a finding, and the tool says so (`UNDER-SPECIFIED CITE, qualify it`).
+
+### The validator, and proof that it fires
+
+The reviewer asked for a start>end + past-EOF validator, on the grounds that it converts the *next* occurrence into evidence. It already exists inside `reanchor-cites.ts` — it is what found all ten descending ranges and the eight past-EOF cites; neither was a hand-read. Run standalone as `reanchor-cites.ts <pin> <pin>`.
+
+Claiming a checker works is not evidence that it ran, so it was **proved by injection**: two deliberately impossible cites (`rpc-types.ts:120-100` descending, `rpc-types.ts:99999` past EOF) were added to `protocol.md`, and the run flagged both — `range inverted after mapping (120 > 100)` and `line 99999 is past EOF ... (290 lines)`. Surface returned to 1,177/0/1 on restore.
+
+### Enumerations are now measured, not asserted
+
+The table above states numbers; `.pi/scripts/recount-enumerations.sh [pin]` **re-derives every one of them**, printing the command beside each figure so a reader who was not here can check rather than trust. It ends with the same-pin control run, so cite-surface health is re-derivable on the same footing. All eight figures reproduce exactly.
+
 ---
 
 ## 2026-07-25 — pulled to `b4f29368` (v0.82.1)

@@ -11,11 +11,11 @@ pi.registerProvider(name: string, config: ProviderConfig): void;
 pi.unregisterProvider(name: string): void;
 ```
 
-`registerProvider` at `types.ts:1416-1417` (two overloads; three full inline examples in the JSDoc at `:1364-1415`). `unregisterProvider` at `types.ts:1432`.
+`registerProvider` at `extensions/types.ts:1416-1417` (two overloads; three full inline examples in the JSDoc at `:1364-1415`). `unregisterProvider` at `extensions/types.ts:1432`.
 
 ## ProviderConfig — three operating modes
 
-The shape is `ProviderConfig` at `types.ts:1443-1487`. Which fields you set determines the behavior:
+The shape is `ProviderConfig` at `extensions/types.ts:1443-1487`. Which fields you set determines the behavior:
 
 | Mode | Fields set | What happens |
 |---|---|---|
@@ -24,7 +24,7 @@ The shape is `ProviderConfig` at `types.ts:1443-1487`. Which fields you set dete
 | **OAuth registration** | `oauth` block | Plugs into the `/login` UI. Combine with `models` for a full custom provider, or `baseUrl` to add OAuth to a built-in. |
 | **Custom transport** | `streamSimple` | Bypasses pi-ai's built-in providers entirely; the extension ships its own `(model, context, options) => AssistantMessageEventStream` implementation. |
 
-Field reference (`types.ts:1354-1393`):
+Field reference (`extensions/types.ts:1354-1393`):
 
 | Field | Type | Required when | Notes |
 |---|---|---|---|
@@ -42,7 +42,7 @@ The model-entry type (formerly `ProviderModelConfig`; that named type no longer 
 
 ## OAuth provider contract
 
-When `config.oauth` is set, pi adds the provider to the `/login` flow. Contract (`types.ts:1377-1390`):
+When `config.oauth` is set, pi adds the provider to the `/login` flow. Contract (`extensions/types.ts:1377-1390`):
 
 ```ts
 oauth?: {
@@ -60,11 +60,11 @@ The `id` field on `oauth` is set automatically from the registration `name`.
 
 ## Timing — when registration takes effect
 
-JSDoc at `types.ts:1281-1285`:
+JSDoc at `extensions/types.ts:1281-1285`:
 
 > During initial extension load this call is **queued** and applied once the runner has bound its context. After that it takes effect immediately, so it is safe to call from command handlers or event callbacks without requiring a `/reload`.
 
-Concretely: a `registerProvider` call from the factory function runs before the runner exists, so it's parked in `pendingProviderRegistrations` (`types.ts:1492`) and replayed during runner binding. A `registerProvider` call from inside a hook handler or command handler executes immediately against the live registry.
+Concretely: a `registerProvider` call from the factory function runs before the runner exists, so it's parked in `pendingProviderRegistrations` (`extensions/types.ts:1492`) and replayed during runner binding. A `registerProvider` call from inside a hook handler or command handler executes immediately against the live registry.
 
 ## Worked examples
 

@@ -4,7 +4,7 @@ Section-by-section breakdown of what `buildSystemPrompt` produces, branch by bra
 
 ## Entry point
 
-`buildSystemPrompt(options: BuildSystemPromptOptions)` at `system-prompt.ts:28-162`.
+`buildSystemPrompt(options: BuildSystemPromptOptions)` at `core/system-prompt.ts:28-162`.
 
 Inputs:
 - `customPrompt?: string` — if set, the function takes the **customPrompt branch** (`:46-72`). Otherwise the **default-prompt branch** (`:74-161`) builds pi's stock prompt from scratch.
@@ -61,9 +61,9 @@ Order in the assembled string (built into a single `prompt` variable starting at
 </skill>
 ```
 
-Wrapped in `<available_skills>…</available_skills>` plus a three-line preamble instructing the model to `read` the location when a description matches (`skills.ts:343-345`). Skills with `disableModelInvocation: true` are filtered out at `skills.ts:336` (so they remain `/skill:name`-invocable but never appear in the prompt).
+Wrapped in `<available_skills>…</available_skills>` plus a three-line preamble instructing the model to `read` the location when a description matches (`core/skills.ts:343-345`). Skills with `disableModelInvocation: true` are filtered out at `core/skills.ts:336` (so they remain `/skill:name`-invocable but never appear in the prompt).
 
-**The body of `SKILL.md` is never injected into the system prompt.** It is loaded later, on demand, when the model issues a `read` tool call against `<location>`. That is why the `read`-tool gate at `system-prompt.ts:65` (customPrompt, `customPromptHasRead`) and `:155` (default, `hasRead`) actually disables skills entirely — without `read`, the model cannot follow up on a skill listing.
+**The body of `SKILL.md` is never injected into the system prompt.** It is loaded later, on demand, when the model issues a `read` tool call against `<location>`. That is why the `read`-tool gate at `core/system-prompt.ts:65` (customPrompt, `customPromptHasRead`) and `:155` (default, `hasRead`) actually disables skills entirely — without `read`, the model cannot follow up on a skill listing.
 
 ## What this means for cache layout
 

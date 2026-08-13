@@ -31,7 +31,7 @@ Pi RPC mode reference: protocol shape, command catalog, event stream, and the ex
 
 ## Quick start when asked
 
-- "How do I frame messages on the wire?" → `reference/protocol.md`. LF-only, strip optional trailing `\r`. Do **not** use Node `readline` — it splits on U+2028/U+2029 which are valid inside JSON strings (`jsonl.ts:13-21`, `rpc.md:29-40`). Use `attachJsonlLineReader` from `jsonl.ts` or replicate its loop.
+- "How do I frame messages on the wire?" → `reference/protocol.md`. LF-only, strip optional trailing `\r`. Do **not** use Node `readline` — it splits on U+2028/U+2029 which are valid inside JSON strings (`rpc/jsonl.ts:13-21`, `rpc.md:29-40`). Use `attachJsonlLineReader` from `jsonl.ts` or replicate its loop.
 - "What command does X?" / "What does the response for Y look like?" → `reference/protocol.md` (command table). Source-of-truth wire types: `packages/coding-agent/src/modes/rpc/rpc-types.ts` (264 lines, the entire schema in one file).
 - "What events fire during a prompt?" → `reference/protocol.md` (event table). Order: `agent_start` → (per turn: `turn_start` → `message_start` → many `message_update` → `message_end` → optional `tool_execution_*` → `turn_end`) → `agent_end` (carries `willRetry`; not terminal if `true`) → `agent_settled` (**new in 0.80.x** — the true end-of-run signal that `waitForIdle` resolves on). Plus `queue_update`, `compaction_*`, `auto_retry_*`, `extension_error` cross-cutting.
 - "Why does my extension hang in RPC mode?" → `reference/extension-ui-bridge.md`. Awaited `ctx.ui` methods (select / confirm / input / editor) emit `extension_ui_request` and **wait** for an `extension_ui_response` with matching `id`. If the host doesn't reply, only `signal` or `timeout` (resolves to default) unblocks them.
