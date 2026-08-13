@@ -67,27 +67,25 @@ function byBasename(files: string[]): Map<string, string[]> {
 const oldByBase = byBasename(oldFiles);
 const newByBase = byBasename(newFiles);
 
-/**
- * Reviewed disambiguation for basenames that collide in the tree. Each entry was
- * decided by reading BOTH candidates' content at the old pin against the prose that
- * cites them (2026-08-13, v0.82.1 → v0.84.1 pass). The alternates are consistently
- * `packages/agent/src/harness/*` (the harness copies) or `packages/server`/`packages/tui`
- * namesakes, and in every case the cited line was past-EOF or unrelated there.
- * A document's OWN qualified mention still wins over this table.
+/*
+ * NO BASENAME HINT TABLE, DELIBERATELY.
+ *
+ * An earlier revision of this script carried a reviewed `basename -> path` map so bare
+ * cites like `types.ts:1069` would resolve. That is plausibility wearing a lab coat: it
+ * picks the likeliest file and THEN content-matches, so the anchor looks verified while
+ * the path was assumed. Measured 2026-08-13: of 100 hint-resolved cites only 57 were
+ * independently unique across the full candidate set — the table carried the other 43.
+ *
+ * And content can never settle some of them. `packages/agent/src/harness/` holds
+ * near-duplicates of `packages/coding-agent/src/core/` — 354 identical lines between the
+ * two `compaction.ts` files at v0.84.1 — so the rival candidates contain the SAME text.
+ * No matcher can discriminate; only the doc can, by saying which file it means.
+ *
+ * So the fix lives upstream of this tool: `qualify-cites.ts` rewrote every under-specified
+ * cite to its minimal unique path suffix. Verified by deleting this table and re-running:
+ * 1177 matched / 0 ambiguous, unchanged. Do not add it back. An ambiguous cite is a
+ * finding to fix in the document, not a lookup to satisfy here.
  */
-const BASENAME_HINTS: Record<string, string> = {
-	"loader.ts": "packages/coding-agent/src/core/extensions/loader.ts",
-	"skills.ts": "packages/coding-agent/src/core/skills.ts",
-	"config.ts": "packages/coding-agent/src/config.ts",
-	"project-trust.ts": "packages/coding-agent/src/core/project-trust.ts",
-	"system-prompt.ts": "packages/coding-agent/src/core/system-prompt.ts",
-	"prompt-templates.ts": "packages/coding-agent/src/core/prompt-templates.ts",
-	"compaction.ts": "packages/coding-agent/src/core/compaction/compaction.ts",
-	"index.ts": "packages/coding-agent/src/index.ts",
-	// v0.84.1 added packages/agent/src/harness/session/jsonl.ts; the kb always means the RPC framer.
-	"jsonl.ts": "packages/coding-agent/src/modes/rpc/jsonl.ts",
-	"compaction/compaction.ts": "packages/coding-agent/src/core/compaction/compaction.ts",
-};
 
 const blobCache = new Map<string, string[] | null>();
 function blobLines(pin: string, path: string): string[] | null {
@@ -183,11 +181,7 @@ function resolvePath(
 	if (pathText.includes("/")) {
 		const suffix = oldFiles.filter((f) => f.endsWith("/" + pathText));
 		if (suffix.length === 1) return { path: suffix[0], reason: "unique suffix match" };
-		if (suffix.length > 1) {
-			const h = BASENAME_HINTS[pathText];
-			if (h && oldSet.has(h)) return { path: h, reason: "suffix resolved via reviewed BASENAME_HINTS" };
-			return { path: null, reason: `suffix matches ${suffix.length} files` };
-		}
+		if (suffix.length > 1) return { path: null, reason: `suffix matches ${suffix.length} files — UNDER-SPECIFIED CITE, qualify it` };
 		return { path: null, reason: "path absent from old tree" };
 	}
 	// bare basename: prefer the document's own context, then repo-wide uniqueness
@@ -197,9 +191,7 @@ function resolvePath(
 	const cands = oldByBase.get(b) ?? [];
 	if (cands.length === 1) return { path: cands[0], reason: "basename unique in old tree" };
 	if (cands.length === 0) return { path: null, reason: "basename absent from old tree" };
-	const hint = BASENAME_HINTS[b];
-	if (hint && oldSet.has(hint)) return { path: hint, reason: "basename resolved via reviewed BASENAME_HINTS" };
-	return { path: null, reason: `basename ambiguous (${cands.length} candidates in old tree)` };
+	return { path: null, reason: `basename ambiguous (${cands.length} candidates in old tree) — UNDER-SPECIFIED CITE, qualify it` };
 }
 
 /**

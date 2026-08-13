@@ -29,10 +29,10 @@ Three reasons (`compaction_start` event payload, `agent-session.ts:126`):
 | Reason | Trigger | Code |
 |---|---|---|
 | `"manual"` | User-initiated via `/compact` command, RPC `compact` command, or `pi.compact()` from an extension. | `agent-session.ts:1645-1648` (entry to `compact()`) |
-| `"threshold"` | After each assistant message: token count exceeds `contextWindow - reserveTokens`. | `agent-session.ts:1880-1882` (post-message check), `compaction.ts:246-249` (`shouldCompact`) |
+| `"threshold"` | After each assistant message: token count exceeds `contextWindow - reserveTokens`. | `agent-session.ts:1880-1882` (post-message check), `core/compaction/compaction.ts:246-249` (`shouldCompact`) |
 | `"overflow"` | An LLM call **failed** with a context-overflow error; pi auto-compacts and retries. | `agent-session.ts:1811-1849` (the retry path, `willRetry: true`) |
 
-`shouldCompact(contextTokens, contextWindow, settings)` at `compaction.ts:246-249`:
+`shouldCompact(contextTokens, contextWindow, settings)` at `core/compaction/compaction.ts:246-249`:
 
 ```ts
 if (!settings.enabled) return false;
@@ -63,7 +63,7 @@ These are the values **per source**, not approximations.
 
 `prepareCompaction` → `compact` → `appendCompaction`. Three distinct phases:
 
-### Phase 1 — `prepareCompaction(pathEntries, settings)` at `compaction.ts:691-…`
+### Phase 1 — `prepareCompaction(pathEntries, settings)` at `core/compaction/compaction.ts:691-…`
 
 Returns a `CompactionPreparation` (`:596-612`) carrying:
 
@@ -81,19 +81,19 @@ Returns `undefined` (skip compaction) if:
 - The leaf is already a compaction entry (`:619-621`).
 - The session has no usable cut point (e.g., not enough entries).
 
-`findCutPoint` at `compaction.ts:412-…` walks backward from the leaf looking for a turn boundary that leaves `keepRecentTokens` of conversation after the cut. Default: 20000 tokens of recent conversation.
+`findCutPoint` at `core/compaction/compaction.ts:412-…` walks backward from the leaf looking for a turn boundary that leaves `keepRecentTokens` of conversation after the cut. Default: 20000 tokens of recent conversation.
 
-### Phase 2 — `compact(preparation, settings, ...)` at `compaction.ts:794-…`
+### Phase 2 — `compact(preparation, settings, ...)` at `core/compaction/compaction.ts:794-…`
 
 Generates the summary by calling the LLM. Steps:
 
 1. **Run `session_before_compact` hook** if any extension subscribes (`agent-session.ts:1673-1688` for manual, `:1913-1925` for auto). The hook can:
    - Cancel via `{ cancel: true }`.
    - Replace via `{ compaction: CompactionResult }` — extension supplies the entire result, pi skips its own summarization.
-2. If no extension overrides, call `generateSummary` (`compaction.ts:540-…`). This makes a one-shot LLM call with the messages-to-summarize plus optional `customInstructions` and the `previousSummary` (for iterative update).
+2. If no extension overrides, call `generateSummary` (`core/compaction/compaction.ts:540-…`). This makes a one-shot LLM call with the messages-to-summarize plus optional `customInstructions` and the `previousSummary` (for iterative update).
 3. Surfaces `compaction_end` event with `aborted` / `willRetry` flags and the `CompactionResult` (`agent-session.ts:1736` for manual, `:2000` for auto).
 
-Returns a `CompactionResult` (`compaction.ts:88-97`):
+Returns a `CompactionResult` (`core/compaction/compaction.ts:88-97`):
 
 ```ts
 {

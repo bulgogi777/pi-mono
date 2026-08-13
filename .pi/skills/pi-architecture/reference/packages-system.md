@@ -67,7 +67,7 @@ When `pi` resolves a package, it reads the package's `package.json` and looks fo
 }
 ```
 
-All four arrays are optional. Paths are resolved relative to the package's root. Files that don't exist are silently dropped during the manifest scan (`loader.ts:539`). For extensions specifically, `resolveExtensionEntries` (`loader.ts:531-561`) checks the `pi.extensions` field first; if absent, falls back to `index.ts` / `index.js` at the package root.
+All four arrays are optional. Paths are resolved relative to the package's root. Files that don't exist are silently dropped during the manifest scan (`extensions/loader.ts:539`). For extensions specifically, `resolveExtensionEntries` (`extensions/loader.ts:531-561`) checks the `pi.extensions` field first; if absent, falls back to `index.ts` / `index.js` at the package root.
 
 ## Resolution flow
 
@@ -101,8 +101,8 @@ The discovery paths described in `reference/discovery-paths.md` (`<cwd>/.pi/exte
 ## Common gotchas
 
 - **`pi.extensions` can list files that don't exist** — they're silently dropped, not warned. Verify with `ls` after editing the manifest.
-- **The `pi` field must be an object.** If it's a string or array at the top level, `readPiManifest` returns `null` (`loader.ts:506-511`).
-- **`npmCommand`** is consulted only for `pi install` / `pi update`, not for runtime imports. Runtime extension loading uses `jiti` (`loader.ts:373-385`).
+- **The `pi` field must be an object.** If it's a string or array at the top level, `readPiManifest` returns `null` (`extensions/loader.ts:506-511`).
+- **`npmCommand`** is consulted only for `pi install` / `pi update`, not for runtime imports. Runtime extension loading uses `jiti` (`extensions/loader.ts:373-385`).
 - **Lockfile contention** during concurrent `pi install` runs uses `proper-lockfile` (`package-manager.ts:839` and surroundings) — concurrent runs serialize rather than corrupt.
 - **Local paths in `packages` are NOT walked recursively** for resources. They follow the same `pi.extensions` manifest contract as npm packages. For ad-hoc local development, prefer the loose `<cwd>/.pi/extensions/` directory.
 

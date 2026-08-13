@@ -21,7 +21,7 @@ Every auto-discovery path pi uses, in precedence order, grouped by resource type
 "SYSTEM.md", "APPEND_SYSTEM.md"
 ```
 
-If none of these exist under `<cwd>/.pi/`, `hasTrustRequiringProjectResources(cwd)` returns `false` and trust short-circuits to `true` — a bare `.pi/` directory does not trigger a trust prompt (`project-trust.ts:50-52`). Project `.agents/skills` in cwd or any ancestor also count as trust-requiring resources.
+If none of these exist under `<cwd>/.pi/`, `hasTrustRequiringProjectResources(cwd)` returns `false` and trust short-circuits to `true` — a bare `.pi/` directory does not trigger a trust prompt (`core/project-trust.ts:50-52`). Project `.agents/skills` in cwd or any ancestor also count as trust-requiring resources.
 
 **What's never gated** (always loads regardless of trust):
 - `AGENTS.md` / `CLAUDE.md` context files (loaded by `loadProjectContextFiles`).
@@ -33,10 +33,10 @@ If none of these exist under `<cwd>/.pi/`, `hasTrustRequiringProjectResources(cw
 
 1. `trustOverride` — set by `--approve` / `-a` or `--no-approve` / `-na` (`args.ts:196-199`). Wins everything.
 2. `hasTrustRequiringProjectResources(cwd)` — no gated resource exists → auto-trust.
-3. `project_trust` extension handler — only user/global and CLI `-e` extensions participate; project-local extensions aren't loaded yet (`project-trust.ts:54-70`). First yes/no decision wins; `"undecided"` defers.
-4. Persisted decision from `~/.pi/agent/trust.json` — closest saved decision on cwd or any parent path wins (`project-trust.ts:72-75`).
-5. `defaultProjectTrust` global setting — `"ask"` (default) / `"always"` / `"never"` (`project-trust.ts:77-84`).
-6. Interactive prompt if `ctx.hasUI` (`project-trust.ts:90-95`). Otherwise returns `false` (`project-trust.ts:86-88`).
+3. `project_trust` extension handler — only user/global and CLI `-e` extensions participate; project-local extensions aren't loaded yet (`core/project-trust.ts:54-70`). First yes/no decision wins; `"undecided"` defers.
+4. Persisted decision from `~/.pi/agent/trust.json` — closest saved decision on cwd or any parent path wins (`core/project-trust.ts:72-75`).
+5. `defaultProjectTrust` global setting — `"ask"` (default) / `"always"` / `"never"` (`core/project-trust.ts:77-84`).
+6. Interactive prompt if `ctx.hasUI` (`core/project-trust.ts:90-95`). Otherwise returns `false` (`core/project-trust.ts:86-88`).
 
 **Headless RPC semantics:** `--mode rpc`, `--mode json`, and `-p` all set `hasUI=false`. Without `--approve` and without a saved trust decision in `trust.json`, step 6 returns `false` — all project-local gated resources drop, only the global floor loads. The pragmatic patterns for downstream consumers (synapse, apex-app, pi-task, headless dispatch) are:
 - Pass `--approve` per spawn.
@@ -85,12 +85,12 @@ Same trust pattern as SYSTEM.md.
 
 | Resource | Path pattern | Order | Discovery code | Notes |
 |---|---|---|---|---|
-| User skills | `~/.pi/agent/skills/` (recursive scan for `SKILL.md`) | 1st | `loadSkills` at `skills.ts:387`; user-dir scan at `:431` | **User-first** — opposite of extensions and SYSTEM.md |
-| Project skills | `<cwd>/.pi/skills/` | 2nd | `skills.ts:432` | First-wins on name collision; collision recorded as `ResourceDiagnostic` at `skills.ts:412-422` |
-| CLI skill paths | `--skill <path>` (file or directory, repeatable) | 3rd | `skills.ts:454+` (explicit-paths loop) | Always loaded regardless of `includeDefaults` / `--no-skills` |
+| User skills | `~/.pi/agent/skills/` (recursive scan for `SKILL.md`) | 1st | `loadSkills` at `core/skills.ts:387`; user-dir scan at `:431` | **User-first** — opposite of extensions and SYSTEM.md |
+| Project skills | `<cwd>/.pi/skills/` | 2nd | `core/skills.ts:432` | First-wins on name collision; collision recorded as `ResourceDiagnostic` at `core/skills.ts:412-422` |
+| CLI skill paths | `--skill <path>` (file or directory, repeatable) | 3rd | `core/skills.ts:454+` (explicit-paths loop) | Always loaded regardless of `includeDefaults` / `--no-skills` |
 | `--no-skills` / `-ns` | Disables defaults; CLI paths still load | — | `args.ts:165-166`; gated at `resource-loader.ts:467` (`const skillPaths = this.noSkills ? cli-only : cli + defaults`) | `noSkills` only suppresses auto-discovered defaults |
-| `includeDefaults` | Internal API parameter, not a CLI flag | — | `skills.ts:388, :430` | Passed by `DefaultResourceLoader` based on the negation of `noSkills` |
-| Validation | name regex `/^[a-z0-9-]+$/`, length ≤ `MAX_NAME_LENGTH` (=64 at `skills.ts:11`); description required, length ≤ `MAX_DESCRIPTION_LENGTH` (=1024 at `:14`) | — | `validateName` at `skills.ts:92-112`; `validateDescription` at `:117-127` | Length violations are warnings and the skill **still loads**; only a missing/empty description blocks loading |
+| `includeDefaults` | Internal API parameter, not a CLI flag | — | `core/skills.ts:388, :430` | Passed by `DefaultResourceLoader` based on the negation of `noSkills` |
+| Validation | name regex `/^[a-z0-9-]+$/`, length ≤ `MAX_NAME_LENGTH` (=64 at `core/skills.ts:11`); description required, length ≤ `MAX_DESCRIPTION_LENGTH` (=1024 at `:14`) | — | `validateName` at `core/skills.ts:92-112`; `validateDescription` at `:117-127` | Length violations are warnings and the skill **still loads**; only a missing/empty description blocks loading |
 
 ## Prompt templates
 
@@ -98,9 +98,9 @@ Same trust pattern as SYSTEM.md.
 
 | Resource | Path pattern | Order | Discovery code | Notes |
 |---|---|---|---|---|
-| Global prompts | `~/.pi/agent/prompts/` | 1st | `loadPromptTemplates` at `prompt-templates.ts:194`; global-dir resolution at `:201`; load at `:234` | **Global-first**, opposite of skills |
-| Project prompts | `<cwd>/.pi/prompts/` | 2nd | `prompt-templates.ts:203` (project-dir resolution); loaded at `:235` | Both loaded only when `includeDefaults` (`:233`) |
-| CLI prompt paths | `--prompt-template <path>` | 3rd | `prompt-templates.ts:241+` (explicit-paths loop) | |
+| Global prompts | `~/.pi/agent/prompts/` | 1st | `loadPromptTemplates` at `core/prompt-templates.ts:194`; global-dir resolution at `:201`; load at `:234` | **Global-first**, opposite of skills |
+| Project prompts | `<cwd>/.pi/prompts/` | 2nd | `core/prompt-templates.ts:203` (project-dir resolution); loaded at `:235` | Both loaded only when `includeDefaults` (`:233`) |
+| CLI prompt paths | `--prompt-template <path>` | 3rd | `core/prompt-templates.ts:241+` (explicit-paths loop) | |
 | Disable | `--no-prompts` (`noPromptTemplates`) | — | `resource-loader.ts:482-484` (`const promptPaths = this.noPromptTemplates ? cli-only : cli + defaults`) | Same pattern as `--no-skills` |
 | Default values for `$N` | `${1:-default}` since 0.79.1 | — | `docs/prompt-templates.md` | Pi-style positional with default expansion |
 
@@ -120,10 +120,10 @@ Same trust pattern as SYSTEM.md.
 | Resource | Path pattern | Order | Discovery code | Notes |
 |---|---|---|---|---|
 | Project extensions | `<cwd>/.pi/extensions/` | **1st** | `discoverAndLoadExtensions` at `extensions/loader.ts:689-737`; project dir added at `:666-668` | **Project-first** — opposite of skills (but trust-gated, so headless-untrusted RPC sees only the next rows) |
-| Global extensions | `~/.pi/agent/extensions/` | 2nd | `loader.ts:683-685` | |
-| Configured paths | Explicit paths from `settings.extensions` / `--extension`/`-e` CLI | 3rd | `loader.ts:687-701` | Resolved per `cwd`; can be a file, a directory with `index.ts`/`index.js`, or a directory with `package.json` having a `pi` field (`resolveExtensionEntries`) |
-| Discovery rules within a directory | Direct `*.ts` / `*.js` files; subdirs with `index.ts`/`index.js`; subdirs with `package.json` declaring `pi` | — | `discoverExtensionsInDir` at `loader.ts:621-653` | One level only; deeper structures need a `package.json` manifest |
-| Dedupe | By resolved absolute path | — | `loader.ts:667-676` (`seen` set) | First occurrence wins |
+| Global extensions | `~/.pi/agent/extensions/` | 2nd | `extensions/loader.ts:683-685` | |
+| Configured paths | Explicit paths from `settings.extensions` / `--extension`/`-e` CLI | 3rd | `extensions/loader.ts:687-701` | Resolved per `cwd`; can be a file, a directory with `index.ts`/`index.js`, or a directory with `package.json` having a `pi` field (`resolveExtensionEntries`) |
+| Discovery rules within a directory | Direct `*.ts` / `*.js` files; subdirs with `index.ts`/`index.js`; subdirs with `package.json` declaring `pi` | — | `discoverExtensionsInDir` at `extensions/loader.ts:621-653` | One level only; deeper structures need a `package.json` manifest |
+| Dedupe | By resolved absolute path | — | `extensions/loader.ts:667-676` (`seen` set) | First occurrence wins |
 | `--no-extensions` / `-ne` | Skips all auto-discovery; CLI `-e` paths still load | — | `cli/args.ts` (`noExtensions` field; same pattern as `--no-skills`) | |
 
 ## Settings (settings.json)
