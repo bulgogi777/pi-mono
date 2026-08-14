@@ -155,6 +155,36 @@ Proven 2026-07-16 on the 0.79.10 → 0.80.9 jump. Four gates tied to the territo
 
 > **Corollary — a data-loss FIX upstream can look like a regression downstream.** v0.84.0 also fixed pi-ai to preserve content carried on the initial `content_block_start` (#7358, `api/anthropic-messages.ts:588-603`). That text reaches clients **only** via the final message — `text_start` carries no delta — so a delta-accumulating client shows a mid-stream gap that repairs at `turn_end`, and loses it permanently on any path that terminates without one. Per the originating issue (#7283) the trigger is **Anthropic-*compatible gateways*** (LiteLLM and friends), not `api.anthropic.com` — i.e. our `ollama-cloud` drought fallback and `cloudflare-ai-gateway`, not the normal path. Generalize the lesson: when auditing a release, read the *fixes* for downstream shape impact, not only the breaking-changes section.
 
+### Fork CI noise — disable the workflow, do not debug it
+
+Pushing `main` at a pin bump triggers upstream's `CI` workflow **on our fork**, which mails Bogie on failure. Three workflows are now `disabled_manually` on `bulgogi777/pi-mono` for the same reason:
+
+| Workflow | Fires on | Disabled |
+|---|---|---|
+| `CI` | push/PR to `main` | 2026-08-13 |
+| `npm audit` | schedule | earlier |
+| `Publish Model Catalog` | schedule | earlier |
+
+**Why disabling is correct here, not lazy:** `CI` triggers only on `branches: [main]` (`.github/workflows/ci.yml:4-7`). Our `main` is **verbatim upstream code we never modify**, and our own work lives on `expert/main`, which the trigger does not match. So this workflow can never report anything about work we did — it can only re-test upstream's tree on our Actions minutes.
+
+**The 2026-08-13 failure is worth understanding, because it will recur and it is not upstream's mistake in an obvious way.** `build-check-test` failed at the `Check` step:
+
+```
+Argument of type '"gemini-2.0-flash"' is not assignable to parameter of type 'ModelId<...>'
+packages/ai/test/total-tokens.test.ts:228
+```
+
+**The build is NON-HERMETIC.** `packages/ai/src/providers/data/` is gitignored (`.gitignore:11`) and regenerated at build from **models.dev over the network**, so `ModelId<>` is derived from whatever that service returns *at build time*. Measured 2026-08-13:
+
+- shipped `@earendil-works/pi-ai@0.84.1` tarball → `package/dist/providers/data/google.json` **contains** `gemini-2.0-flash` (it existed when the release was cut)
+- live `models.dev/api.json` → google lists 39 models and **does not** contain `gemini-2.0-flash` (Google retired it since)
+
+So a test file with the id hardcoded stops typechecking with **no commit having changed**. The same commit's CI result is a function of the date. That is why the `v0.79.10`, `v0.80.9` and `v0.82.1` main-pushes all went green and `v0.84.1` went red — re-running the older ones today would likely fail too.
+
+**Consequence for this expert, beyond the noise:** it is a second instance of the standing rule that *model-availability questions cannot be answered from the pinned tree*. The tree does not contain the catalog; the tarball does; and the live generator drifts out from under both. When a claim depends on which models a release knows, read the tarball — never the tree, and never a CI result.
+
+Re-enable if ever needed: `gh workflow enable CI --repo bulgogi777/pi-mono`.
+
 ### Rollback procedure (both halves — a partial rollback leaves runtime and cites mismatched)
 
 Fully reversible; nothing in the upgrade is destructive. npm retains all published versions; git retains the prior tag + expert HEAD.
