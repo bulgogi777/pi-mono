@@ -14,8 +14,9 @@ description: >-
   setStatus / setWidget / setTitle / set_editor_text), or RpcClient.
   Also USE WHEN debugging stuck commands, hung extension
   dialogs, framing corruption, "agent already streaming" errors, an abort that
-  no longer returns immediately, or a queued steering/follow-up message you need
-  to cancel and hand back to the user. Do
+  takes longer to settle than expected (0.85.0 folded compaction and branch
+  summary into idle tracking; the await itself is NOT new), or a queued
+  steering/follow-up message you need to cancel and hand back to the user. Do
   NOT use for hook events / ExtensionAPI (pi-extensions), session JSONL
   format (pi-sessions), system prompt (pi-prompt-assembly), path discovery
   (pi-architecture), provider / auth (pi-providers), or non-pi topics.

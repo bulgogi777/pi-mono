@@ -35,9 +35,22 @@ Citations: `<sha>` for commit; `<file>:<line>` against the **new pin** (unless o
 - Added 0.84.4. `RpcCommand` member at `modes/rpc/rpc-types.ts:26`, response (with `data: { steering: string[]; followUp: string[] }`) at `:125`, dispatch at `modes/rpc/rpc-mode.ts:433-435`, implementation `AgentSession.clearQueue()` at `core/agent-session.ts:1587`.
 - Drains the steering + follow-up queues **and returns their text** so a client can restore it in an editor. Documented Esc recipe (`docs/rpc.md`): `clear_queue` **then** `abort` — because `abort` alone *continues* messages still queued.
 
-**Wire: `abort` now blocks until idle (high) — BEHAVIORAL, easy to miss**
-- `rpc-mode.ts:428-431` now `await`s `session.abort()`; `docs/rpc.md` reworded to "Abort the current operation and wait for the session to become idle before responding." At `v0.84.1` our own kb stated "Does not wait for completion" — true then, wrong now.
-- A client that fired `abort` and expected a prompt ack will now sit until the turn unwinds. No type change signals this; only the docs prose does.
+**~~Wire: `abort` now blocks until idle (high) — BEHAVIORAL, easy to miss~~ — RETRACTED, see correction below**
+
+> **CORRECTION 2026-09-06 (same day this entry was written).** The two bullets originally here were **wrong**. They read:
+>
+> > *"`rpc-mode.ts:428-431` now `await`s `session.abort()`; `docs/rpc.md` reworded to 'Abort the current operation and wait for the session to become idle before responding.' At `v0.84.1` our own kb stated 'Does not wait for completion' — true then, wrong now."*
+> > *"A client that fired `abort` and expected a prompt ack will now sit until the turn unwinds. No type change signals this; only the docs prose does."*
+>
+> **`abort` did not change in this range.** `git show v0.84.1:.../rpc-mode.ts` and the `v0.85.1` file are **byte-identical at `:428-431`** — both `await session.abort()`. The `await` entered at the RPC rewrite (`3559a43ba`), long before either tag. Verified independently at both tags, not re-derived from this entry's own prose.
+>
+> **What I actually did:** read the `docs/rpc.md` rewording as a behaviour change without diffing the implementation. The kb line this entry "corrected" (`protocol.md`: *"Does not wait for completion"*) **was already wrong at `v0.84.1`** — so it was an error-class defect all along, and I mislabelled it as fresh drift.
+>
+> **The real 0.85.0 change, which this entry missed entirely:** commit `bea67d90d` ("cancel compaction on session abort", upstream #8920) folded compaction and branch summarization into idle tracking. `isIdle` went `!this._isAgentRunActive` (`agent-session.ts:883-885` @ v0.84.1) → `!this._isAgentRunActive && !this.isCompacting` (`:925-927` @ v0.85.1), and `abort()` (`:1619-1625`) now calls `abortCompaction()` and `abortBranchSummary()` before awaiting idle. **Consumer impact:** `abort` still returns only when idle as it always did, but an abort landing during auto-compaction now waits for that cancellation too, so settle is slower than pre-0.85.0. Queue semantics are unchanged.
+>
+> **Cost, recorded because it is the argument for the rule below:** this claim was relayed to a delegator holding a merge gate on `clear_queue` Esc handling in apex-app (outcome `4843bea0`, thread `c85377f0`). They received it as "Esc behaviour changed in 0.85.1" and were about to encode it in a design doc. The reply that corrected it had to lead with the retraction.
+>
+> **Method rule this produces — the inverse of gate 6.** Gate 6 exists because prose states removals the types miss, so it says *diff the contract docs, not only the code*. This is the mirror failure: **prose also states clarifications that read like changes.** A docs delta is a *pointer* to check the implementation at that release, never itself evidence of a behaviour change. Diff the code for the specific release before recording any behavioural claim sourced from a doc rewording.
 
 **Wire: `message_update` gains top-level `usage`; `toolcall_start` gains `id` + `toolName` (high)**
 - Both produced by `modes/json-event.ts` (`toJsonEvent` `:47-61`, `toJsonAssistantMessageEvent` `:20-37`), not by `rpc-types.ts`. `usage` may stay all-zero until completion for providers that don't report mid-stream.
