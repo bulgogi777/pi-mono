@@ -89,11 +89,51 @@ OAuth tokens are populated by the `/login` flow per provider. `/logout` clears t
 
 `findLoginProviderOptions(providerRef)` (`:5485`) is what produces the candidate list, and `modelRuntime.getAvailable()` is awaited first (`:5151`) so the selector reflects the live registry.
 
+## What changed in the Anthropic auth path, 0.84.2 → 0.85.1
+
+`packages/ai/src/api/anthropic-messages.ts` was rewritten (+203 / −65). **The OAuth billing mechanism itself is unchanged** — Bearer auth, Claude Code identity headers, two-block cached system prompt — and was verified live (`cacheWrite=40354` on a subscription call under 0.85.1). What moved is the *assembly* of headers and betas, and two of those changes have consequences.
+
+### 1. The impersonated Claude Code version was bumped
+
+`claudeCodeVersion` (`anthropic-messages.ts:81`) went **`2.1.75` → `2.1.251`**. It is sent as `user-agent: claude-cli/${claudeCodeVersion}` alongside `x-app: cli` (`:943-944`) on the OAuth branch only. This string is part of what makes subscription auth work; it is not cosmetic. **A stale pin means a stale impersonated version**, which is one more reason not to let the pin drift — if Anthropic ever gates on a minimum, the tree would not tell you.
+
+### 2. Header and beta assembly were extracted — and both are now OVERRIDABLE by design
+
+Two new helpers replace what used to be inline construction:
+
+| Helper | Cite | What it does |
+|---|---|---|
+| `mergeClientHeaders(...sources)` | `:288-290` | Seeds `User-Agent: getPiUserAgent()`, then merges each source left-to-right. **Later sources win.** |
+| `getBetaFeatures(...)` | ends `:1017` | Computes the `anthropic-beta` list, including the OAuth pair at `:1003`. |
+
+> ⚠ **An explicit `anthropic-beta` header REPLACES the computed betas outright — including `claude-code-20250219,oauth-2025-04-20`.** `getBetaFeatures` scans `model.headers` then `options.headers`; if either sets `anthropic-beta`, that value is used verbatim and **none** of the computed features are added (`:985-1000`). Setting it to `null` returns `[]` — no betas at all.
+>
+> This is **intended, tested behavior**, not a bug: `packages/ai/test/anthropic-auth-token.test.ts` asserts "preserves explicit Anthropic beta header replacement" (`:218`) and "preserves explicit Anthropic beta header suppression" (`:227`). The same file asserts the User-Agent is overridable (`:208`).
+>
+> **Consequence for APEX:** any consumer that sets a custom `anthropic-beta` or `user-agent` on an Anthropic model config would silently strip the OAuth identity and **move billing off the Max subscription onto the per-token extra-usage pool.** Nothing errors; the call succeeds and costs money. We do not set either header today (checked 2026-09-06), so this is a latent hazard, not an active one — but it is exactly the shape that gate 2 (`cacheWrite > 0` on a live call) exists to catch, and it is why gate 2 must stay a *live probe* rather than a grep.
+
+### 3. `auth.json` is no longer force-chmodded on every write
+
+`packages/coding-agent/src/core/auth-storage.ts` **removed three `chmodSync(this.authPath, 0o600)` calls** (after `ensureFileExists` and both write paths). The mode `0o600` now rides only on `writeFileSync`'s `AUTH_FILE_WRITE_OPTIONS`, and upstream's own comment states the intent: *"The mode applies only on creation so administrator-managed modes and ACLs remain intact."*
+
+**`writeFileSync`'s `mode` applies only when the file is created.** So on `>= 0.85.x`, an `auth.json` that already has loose permissions **stays loose forever** — pi will not tighten it again. Previously every credential write re-asserted `0600`.
+
+- **Our box is fine:** `~/.pi/agent/auth.json` is `0600` (verified 2026-09-06), holding three OAuth credentials (`anthropic`, `openai-codex`, `google-gemini-cli`). The containing dir is `0775`, which permits directory traversal/listing but does not expose the file contents.
+- **Check this after any operation that recreates or copies `auth.json`** (restore from backup, `rsync` without `-p`, a container bind-mount). A restored-with-wrong-mode credential file is now silently permanent.
+
+### 4. BOM tolerance on credential reads
+
+Every `auth.json` read now passes through `stripBom()` (`auth-storage.ts` — `ReadOnlyAuthStorage`, `AuthStorage`, and `readStoredCredential`). A UTF-8 BOM previously made `JSON.parse` throw, which surfaced as "no credentials" rather than "corrupt file." Same treatment landed on context files and prompt input in `resource-loader.ts`.
+
+### 5. Not an auth change, but adjacent: `models.json` default resolution
+
+`provider-composer.ts` added `findModelDefaults()` (`:168-176`). When a `models.json` entry defines a model, the defaults it inherits are now resolved by **id → same `api` → `openai-completions` → first model**, where previously an unmatched id silently inherited `models[0]`. If you define a custom model against a provider, it now inherits from a sibling that shares its API rather than from whatever happened to be first.
+
 ## Anthropic OAuth detection — `sk-ant-oat`
 
 The Anthropic OAuth path is the source of two recurring questions: "is pi using my OAuth or API key?" and "why does pi say I'm out of credits when I have a Max sub?" Both reduce to one detail.
 
-**OAuth-token prefix detection**: `interactive-mode.ts:236-243`:
+**OAuth-token prefix detection**: `interactive-mode.ts:256-258`:
 
 ```typescript
 function isAnthropicSubscriptionAuthKey(apiKey: string | undefined): boolean {
@@ -101,9 +141,11 @@ function isAnthropicSubscriptionAuthKey(apiKey: string | undefined): boolean {
 }
 ```
 
-The `sk-ant-oat` prefix means "Anthropic OAuth Access Token" — i.e. the credential is from `/login` against `claude.ai`, not from the API console. When this returns true, pi shows the warning constant `ANTHROPIC_SUBSCRIPTION_AUTH_WARNING` at `interactive-mode.ts:206-208` (emission helper `maybeWarnAboutAnthropicSubscriptionAuth` at `:4609`, `showWarning(...)` calls at `:4625` and `:4635`):
+The `sk-ant-oat` prefix means "Anthropic OAuth Access Token" — i.e. the credential is from `/login` against `claude.ai`, not from the API console. When this returns true, pi shows the warning constant `ANTHROPIC_SUBSCRIPTION_AUTH_WARNING` at `interactive-mode.ts:253-254` (emission helper `maybeWarnAboutAnthropicSubscriptionAuth` at `:4908`, `showWarning(...)` calls at `:4924` and `:4932`; six invocation sites at `:1108`, `:4202`, `:4853`, `:4999`, `:5715`, `:5722`):
 
-> "Anthropic subscription auth is active. Third-party harness usage draws from extra usage and is billed per token, not your Claude plan limits. Manage extra usage at https://claude.ai/settings/usage."
+> "Anthropic subscription auth is active. Third-party harness usage draws from extra usage and is billed per token, not your Claude plan limits. Manage extra usage at https://claude.ai/settings/usage. Disable this warning in /settings."
+
+> **Cite correction, 2026-09-06.** This page previously cited the warning constant at `interactive-mode.ts:206-208` and the helper at `:4609` / `:4625` / `:4635`. **Those were wrong at `v0.84.1` as well as now** — line 206 at `v0.84.1` held `type RenderSessionItem = ...`, not the warning. So this was an *error*, not drift, and it survived both the `v0.84.1` and `v0.85.1` mechanical re-anchor passes untouched (a drift pass maps where a line *went*; it cannot notice a cite that never pointed anywhere right). Values above re-read at `v0.85.1`. The warning **text also changed** in this range, gaining the trailing "Disable this warning in /settings." — which is why no content matcher could have relocated it either.
 
 This is the canonical statement of the billing model: **OAuth-from-Claude-Pro/Max → extra-usage pool → per-token billing**. The Pro/Max plan limit (e.g. "5x messages every 5 hours") covers usage **inside the Claude.ai web app**, not OAuth API traffic from third-party harnesses like pi.
 
