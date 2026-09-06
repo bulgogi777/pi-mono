@@ -12,9 +12,14 @@ description: >-
   WHEN asked about the project_trust event (0.79.0 / 0.79.1 — user/global-only
   pre-resource hook), compaction event reason / willRetry fields (0.79.10),
   long-lived-resource discipline (defer to session_start, idempotent
-  session_shutdown), or autocomplete triggerCharacters (0.79.1). Also USE WHEN debugging an extension that hangs on
+  session_shutdown), or autocomplete triggerCharacters (0.79.1). Also USE WHEN asked about
+  the three events added in 0.85.x — session_compact_failed (the failure
+  counterpart to session_compact, carrying fromExtension) and the
+  ui_prompt_start / ui_prompt_end pair (depth-tracked, fire-and-forget
+  notification that pi is blocking on an extension UI prompt). Also USE WHEN debugging an extension that hangs on
   ctx.ui, fails to load from ~/.pi/agent/extensions or .pi/extensions, or whose
-  hook handler return value is being ignored. Do NOT use for pi RPC stdio
+  hook handler return value is being ignored (including a ui_prompt_* handler
+  whose return value is discarded by design). Do NOT use for pi RPC stdio
   protocol shape (use pi-rpc), system-prompt or AGENTS.md/SYSTEM.md assembly
   (use pi-prompt-assembly), session JSONL format or compaction internals (use
   pi-sessions), generic TypeScript questions, or topics outside pi-mono.
