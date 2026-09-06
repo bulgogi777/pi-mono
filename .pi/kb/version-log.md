@@ -6,6 +6,103 @@ Citations: `<sha>` for commit; `<file>:<line>` against the **new pin** (unless o
 
 ---
 
+## 2026-09-06 — pulled to `d981de12` (v0.85.1)
+
+> **Trigger was a filed defect, not a routine eval.** Workitem `3d7d1224` reported the checkout as behind the deployed pi and "silently yielding a wrong RPC surface." Confirmed exactly before acting: `clear_queue` returns **0 hits** across the whole checkout at `v0.84.1` and **7 files** at `v0.85.1` (`git grep -c clear_queue`). The pin had been stale since 0.84.2 shipped. `main` fast-forwarded to `v0.85.1`; `expert/main` rebased clean (29 commits, `.pi/`-only — verified: 46 `.pi/` paths + 1 `.claude/` path, **zero** non-expert files).
+
+**Previous pin:** `53fa77cc` (2026-08-12; covers 0.83.0 → 0.84.1)
+**Target:** tag `v0.85.1` = `d981de12`. New releases in range: `0.84.2`, `0.84.3`, `0.84.4`, `0.85.0`, `0.85.1`.
+**Diff scope:** `v0.84.1..v0.85.1` = **743 commits, 853 files**, ~110.3k insertions / ~27.0k deletions. As always, most volume is TUI (we run RPC only, never the TUI) and is noise for this territory.
+
+### Gates — all six passed, five of them at ZERO marginal token cost
+
+**Method change worth keeping.** The runbook's gate 1/2/5 prescribe a fresh `consult-pi-mono.ts` smoke call, which spends subscription tokens. This run instead harvested the evidence from **the live apex-app session running the eval itself** — that session *is* a pi-RPC-on-anthropic dispatch under 0.85.1, so it constitutes the gate. Read from `~/.pi/agent/sessions/--home-debian-apex-x-code-pi-mono--/<id>.jsonl`:
+
+| Gate | Result | Evidence |
+|---|---|---|
+| 1 RPC timing / terminal events | pass | session streams and turns complete; tool calls return |
+| 2 **Billing floor** | pass | `cacheWrite=40354`, `cacheRead=103543` → `cache_control` active on the OAuth path, billing the Max subscription |
+| 3 Model resolve | pass | `anthropic: "claude-opus-4-8"` in the **installed** `dist/.../model-resolver.js:13` |
+| 4 Trust gating | pass | `isProjectTrusted()` gates at installed `dist/core/resource-loader.js:811,822` |
+| 5 Dispatch proof | pass | session record shows `"model":"claude-opus-5"` ×16 — the *record*, never a self-report |
+| 6 Wire shape | pass (additive + 1 behavioral) | see below |
+
+> **Generalize this:** when the eval is being run *from* a live consumer session on the new runtime, that session is a better instrument than a synthetic smoke call — it is free, it is the real dispatch path, and it cannot be fooled by a model misreporting its own identity. Prefer it whenever available; fall back to `consult-pi-mono.ts` only when no live session is on the new version.
+
+### Behavior changes that matter (territory)
+
+**Wire: `clear_queue` — new command (high)**
+- Added 0.84.4. `RpcCommand` member at `modes/rpc/rpc-types.ts:26`, response (with `data: { steering: string[]; followUp: string[] }`) at `:125`, dispatch at `modes/rpc/rpc-mode.ts:433-435`, implementation `AgentSession.clearQueue()` at `core/agent-session.ts:1587`.
+- Drains the steering + follow-up queues **and returns their text** so a client can restore it in an editor. Documented Esc recipe (`docs/rpc.md`): `clear_queue` **then** `abort` — because `abort` alone *continues* messages still queued.
+
+**Wire: `abort` now blocks until idle (high) — BEHAVIORAL, easy to miss**
+- `rpc-mode.ts:428-431` now `await`s `session.abort()`; `docs/rpc.md` reworded to "Abort the current operation and wait for the session to become idle before responding." At `v0.84.1` our own kb stated "Does not wait for completion" — true then, wrong now.
+- A client that fired `abort` and expected a prompt ack will now sit until the turn unwinds. No type change signals this; only the docs prose does.
+
+**Wire: `message_update` gains top-level `usage`; `toolcall_start` gains `id` + `toolName` (high)**
+- Both produced by `modes/json-event.ts` (`toJsonEvent` `:47-61`, `toJsonAssistantMessageEvent` `:20-37`), not by `rpc-types.ts`. `usage` may stay all-zero until completion for providers that don't report mid-stream.
+- `toolcall_start` previously carried only `contentIndex`, so a client could not learn the tool name until `toolcall_end`. It now can.
+
+**kb ERROR found (not drift): the `partial` / wire split was documented wrong (high)**
+- `pi-rpc/reference/protocol.md` still listed `message_update` as carrying `message: AgentMessage`, and listed `partial` on all ten delta variants — **both removed from the wire in 0.84.0, one pin ago.** The 2026-08-13 re-anchor pass did not catch this because every cite was *in bounds*; only the prose was false. Textbook "an in-bounds cite is not a correct cite."
+- Root cause of the confusion, now written into the skill: **the library type and the wire shape genuinely differ.** `AssistantMessageEvent` at `packages/ai/src/types.ts:546-562` still declares `partial` — that is what **in-process SDK** consumers get. The RPC/JSON wire strips it in `json-event.ts`. Cite `types.ts` for SDK consumers, `json-event.ts` for wire consumers; `rpc-types.ts` answers neither.
+
+**Prompt assembly: the skills gate widened from `read` to `read` OR `bash` (high)**
+- Upstream #8552, "skills unavailable when Bash is the only enabled tool." One `skillFileReadTool` is now computed at `core/system-prompt.ts:46` — `(["read","bash"] as const).find(t => tools.includes(t))` — and gates **both** branches: customPrompt `:66-67`, default `:161-162`. The old `customPromptHasRead` / `hasRead` pair is gone.
+- Threaded into `formatSkillsForPrompt(skills, skillFileReadTool)` (`core/skills.ts:355`), which switches the instruction line between "Use the read tool…" and "Use bash to load a skill's file" (`:365-367`).
+- Side effect: the customPrompt branch's `!selectedTools` short-circuit is **gone**. `undefined` still admits skills, but now only because it falls back to the 4-tool default at `:45`. Same outcome, different mechanism — a distinction that matters to anyone reasoning about `selectedTools: []`.
+- This invalidated a claim in the **description** of `pi-prompt-assembly`, i.e. at routing level, not just in the body.
+
+**Sessions: `inMemory()` gained entry rehydration (medium)**
+- `SessionManager.inMemory(cwd?, options?, entries?: FileEntry[])` at `core/session-manager.ts:1600-1602` (upstream #8980). Supported path for a host that persists session state outside pi's JSONL.
+- Three fork/session defects fixed in 0.85.0, all invisible from the tree alone: fork losing its compaction boundary (#8990), in-memory fork before the turn settled (#8937), and **imported session overwriting an existing file of the same name (#8985) — a data-loss shape on `< 0.85.0`.**
+
+**Anthropic OAuth / billing — intact, but every cite moved (high)**
+- `packages/ai/src/api/anthropic-messages.ts` is +268 lines. Mechanism unchanged: `sk-ant-oat` detect now `:898` (was `:844`), `claude-code-20250219,oauth-2025-04-20` now `:1003` (was `:902`). Confirmed live by gate 2, not by reading.
+
+**Non-changes worth recording (they are what a reader will assume broke)**
+- `defaultModelPerProvider.anthropic` is **still** `claude-opus-4-8` (`core/model-resolver.ts:23`). Other providers' defaults did move (`xai` → `grok-4.6`, `cerebras` → `gpt-oss-120b`, `zai`/`zai-coding-cn` → `glm-5.3`).
+- Trust gating untouched: the `core/resource-loader.ts` diff is **BOM-stripping only** (`stripBom` on context files and prompt input).
+- No consumer model flip required: all four ids we use (`claude-opus-5`, `claude-sonnet-5`, `claude-haiku-4-5`, `claude-opus-4-8`) are present in the **installed tarball** catalog. Env values unchanged (`SYNAPSE_PI_MODEL` / `APEX_APP_PI_MODEL` = `claude-opus-5`), so no daemon restart was needed and gate 5's stale-env check is trivially satisfied.
+- New: `powershell` is now a recognized tool in the file-exploration guideline branch (`core/system-prompt.ts:98,104-109`).
+
+### Trust review (mandatory, pre-rebase)
+
+**Passed.** The incoming `.pi/` diff across 743 commits is **two prompt files, 68 insertions, zero deletions**: a new `.pi/prompts/deslop.md` (code-simplification prompt, carries its own approval gate) and one line added to `.pi/prompts/wr.md` ("When working against a branch other than `main`, skip the changelog"). Both read in full before the rebase. **`.pi/extensions/` is unchanged** — baseline set of four (`prompt-url-widget.ts`, `redraws.ts`, `tps.ts`, `import-repro.ts`) intact, no additions, no modifications. `.pi/git/` and `.pi/npm/` still present.
+
+### Cite re-anchor — both passes, scripted
+
+| Pass | Tool | Result |
+|---|---|---|
+| 1 drift | `reanchor-cites.ts v0.84.1 v0.85.1 --apply` | 1125 live cites matched → **795 rewrites across 33 files**; 330 already correct |
+| 1 control | `reanchor-cites.ts v0.85.1 v0.85.1` | **0 rewrites needed** (1166 unchanged) — the checker is comparing, not rubber-stamping |
+| 2 symbol | `verify-symbol-cites.ts v0.85.1 --fix` | 149 symbol/cite pairs, 7 mismatched, **4 auto-fixed**; 3 left as deliberate in-body class anchors |
+
+**Buckets the tools refused to guess (findings, not noise):** 20 AMBIGUOUS, 33 NOTFOUND. The NOTFOUND cluster on `system-prompt.ts` / `skills.ts` is what surfaced the #8552 gate change above — **a NOTFOUND is a mechanism-changed signal, and reading the cluster is how this run found its highest-value correction.** Do not treat that bucket as residue to be cleared.
+
+**Enumerations re-measured** (`recount-enumerations.sh v0.85.1`): `KnownProvider` **40** (unchanged, table already correct), `ExtensionAPI.on()` overloads **33** (was 30 at the last count), `ExtensionEvent` members **27**, `SessionEntry` types **9**, `rpc-types.ts` **297** lines (was 289 → corrected in `protocol.md`), `rpc-mode.ts` **821** (was 817 → corrected), `jsonl.ts` 58, `providers/anthropic.ts` 59.
+
+### What's now stale / flagged
+
+- `pi-extensions` — `ExtensionAPI.on()` overloads moved 30 → 33; the three new events are not yet identified or documented. **Flagged for `gap-scan`.**
+- `pi-sessions/reference/compaction.md` — still marked `(TBW)` in a cross-reference from `branching-resume.md:94`, and 0.85.0 touched fork/compaction interaction (#8990). Flagged.
+- 3 symbol cites intentionally left unfixed (`SessionManager`, `DefaultResourceLoader` ×2) — deliberate in-body anchors, not errors. Confirm on next scan rather than auto-fixing.
+- 20 AMBIGUOUS cites remain under-specified (mostly bare `}` / `export interface Settings {` anchors). Candidate for a `qualify-cites.ts` pass.
+
+### Files modified in this run
+
+- `.pi/kb/sources.md` — pin `53fa77cc` → `d981de12`; confidence rule re-pointed; **new section "A stale pin is a WRONG-ANSWER bug"** recording the declined freeze-the-checkout option and the two tripwires.
+- `.pi/kb/version-log.md` — this entry.
+- `.pi/skills/pi-rpc/SKILL.md` — `clear_queue` added to the description's command catalog (it was missing at **routing** level); wire-vs-SDK caveat; new Q&A for cancelling queued input.
+- `.pi/skills/pi-rpc/reference/protocol.md` — `abort` row corrected; `clear_queue` row added; `message_update` row rewritten (no `message`, new `usage`); **delta-type table rewritten to wire shape** with the `types.ts`-vs-`json-event.ts` warning; header line counts re-pinned.
+- `.pi/skills/pi-prompt-assembly/SKILL.md` — description + Q&A rewritten for the `read`-OR-`bash` gate.
+- `.pi/skills/pi-prompt-assembly/reference/assembly-order.md` — steps 7 and the skills-body note rewritten.
+- `.pi/skills/pi-prompt-assembly/reference/known-issues.md` — `selectedTools: []` section rewritten around `skillFileReadTool`, with the pre-0.85.0 behavior preserved as a scoped note.
+- `.pi/skills/pi-sessions/SKILL.md`, `reference/branching-resume.md` — `inMemory` signature + `entries[]`; new "Fork bugs fixed in 0.85.0" table.
+- Plus the 795 + 4 mechanical cite rewrites across 33 files.
+
+---
+
 ## 2026-08-12 — pulled to `53fa77cc` (v0.84.1)
 
 > Runtime npm global upgraded `0.82.1 → 0.84.1` and **verified live before the pin bump** — six gates, all passed (see below). `main` fast-forwarded to `v0.84.1`; `expert/main` rebased clean (`.pi/`-only, 23 commits, 0 non-`.pi`/`.claude` files). Trigger: routine forward eval; the pin was **not** stale (it matched the runtime exactly). Run as a two-party eval with the `chat-eng` apex-app session, which owns the largest consumer of pi's wire — that consult changed the outcome and is why the entry below records a **refutation** section.

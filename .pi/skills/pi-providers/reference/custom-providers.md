@@ -11,7 +11,7 @@ For built-in provider env vars and the auth resolution order, see `reference/aut
 
 ## models.json (declarative)
 
-User-facing doc: `packages/coding-agent/docs/models.md`. File path: `~/.pi/agent/models.json` (`getModelsPath()` at `config.ts:416-418`).
+User-facing doc: `packages/coding-agent/docs/models.md`. File path: `~/.pi/agent/models.json` (`getModelsPath()` at `config.ts:429-431`).
 
 ### Minimal example
 
@@ -70,7 +70,7 @@ Fields are optional in `models.json` because pi falls back to sensible defaults 
 
 ### Per-model `baseUrl` (fixed in v0.72.0)
 
-Before v0.72.0, `pi.registerProvider()` and `models.json` ignored per-model `baseUrl` fields, always falling back to the provider-level `baseUrl`. Fixed in `provider-composer.ts` (relocated from `model-registry.ts:886` **as of the pre-v0.80.8 tree** — that path no longer exists at the current pin; moved by `9993c969`) — `definition.baseUrl ?? providerConfig.baseUrl ?? defaults?.baseUrl` at `:142` for the `models.json` path and `definition.baseUrl ?? config.baseUrl ?? defaults?.baseUrl` at `:225` for the `pi.registerProvider()` path ([#4063](https://github.com/badlogic/pi-mono/issues/4063)). After upgrade, models with their own `baseUrl` route there as expected.
+Before v0.72.0, `pi.registerProvider()` and `models.json` ignored per-model `baseUrl` fields, always falling back to the provider-level `baseUrl`. Fixed in `provider-composer.ts` (relocated from `model-registry.ts:886` **as of the pre-v0.80.8 tree** — that path no longer exists at the current pin; moved by `9993c969`) — `definition.baseUrl ?? providerConfig.baseUrl ?? defaults?.baseUrl` at `:142` for the `models.json` path and `definition.baseUrl ?? config.baseUrl ?? defaults?.baseUrl` at `:234` for the `pi.registerProvider()` path ([#4063](https://github.com/badlogic/pi-mono/issues/4063)). After upgrade, models with their own `baseUrl` route there as expected.
 
 ### thinking levels: `thinkingLevelMap` (added v0.72.0, replaces `reasoningEffortMap`)
 
@@ -133,11 +133,11 @@ When set at provider level, applies to all models in that provider. Per-model ov
 
 ### `compat.forceAdaptiveThinking` (Anthropic-compatible endpoints)
 
-`forceAdaptiveThinking?: boolean` (`packages/ai/src/types.ts:661`, default `false`). Anthropic-compatible providers set it to `true` for any model whose upstream **requires** the adaptive thinking format; set it to `false` to opt out on an overridden built-in model.
+`forceAdaptiveThinking?: boolean` (`packages/ai/src/types.ts:710`, default `false`). Anthropic-compatible providers set it to `true` for any model whose upstream **requires** the adaptive thinking format; set it to `false` to opt out on an overridden built-in model.
 
 You rarely set this by hand for first-party Anthropic models — the catalog generator applies it automatically for adaptive-thinking families (`packages/ai/scripts/generate-models.ts`, the `isAnthropicAdaptiveThinkingModel` list). `claude-opus-5` ships with `forceAdaptiveThinking: true`, `supportsTemperature: false`, `thinkingLevelMap {xhigh, max}`. It matters when you point a custom provider at an Anthropic-compatible gateway (Xiaomi MiMo, a BYOK proxy): if the upstream expects the adaptive format and the model entry doesn't declare it, thinking requests fail or silently degrade.
 
-Neighbouring compat flags on the same type: `allowEmptySignature` (`:663` — replay empty thinking signatures as `signature: ""` rather than converting thinking to text) and `supportsStrictTools` (`:665` — Anthropic strict tool schemas; generated Anthropic models enable it explicitly).
+Neighbouring compat flags on the same type: `allowEmptySignature` (`:712` — replay empty thinking signatures as `signature: ""` rather than converting thinking to text) and `supportsStrictTools` (`:714` — Anthropic strict tool schemas; generated Anthropic models enable it explicitly).
 
 ### Overriding built-in providers
 
@@ -179,7 +179,7 @@ Each model can override `baseUrl`, `api`, `headers`, and `compat`. Useful when o
 
 ## Auth resolution for custom providers
 
-For both `models.json` and `pi.registerProvider` registrations, the API key flows through the same resolution path as built-ins — `ModelRuntime.getAuth(providerId)` (`model-runtime.ts:470-472`) → `composeApiKeyAuth` (`provider-composer.ts:301`). (Pre-v0.80.8 this was `AuthStorage.getApiKey`, now removed.) Precedence — re-derived at v0.82.1, full table in `reference/auth-resolution.md`:
+For both `models.json` and `pi.registerProvider` registrations, the API key flows through the same resolution path as built-ins — `ModelRuntime.getAuth(providerId)` (`model-runtime.ts:470-472`) → `composeApiKeyAuth` (`provider-composer.ts:310`). (Pre-v0.80.8 this was `AuthStorage.getApiKey`, now removed.) Precedence — re-derived at v0.82.1, full table in `reference/auth-resolution.md`:
 
 1. **Runtime override** (`--api-key`, `pi.setApiKey`)
 2. **`auth.json` API-key entry** keyed by `providerId`

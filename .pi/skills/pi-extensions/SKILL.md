@@ -43,17 +43,17 @@ Authoring and debugging reference for pi extensions in the pi-mono repo. Each `r
 - "Where does an extension get loaded from?" → `~/.pi/agent/extensions/*.ts`, `<cwd>/.pi/extensions/*.ts`, plus npm `packages` entries in `~/.pi/agent/settings.json`. Loose-`extensions/` directory loads regardless of `settings.json`. Source: `packages/coding-agent/src/core/extensions/loader.ts`.
 - "Is there an example of X?" → `ls packages/coding-agent/examples/extensions/`.
 - "How do I auto-trust certain cwds for headless pi?" → install a user/global extension with a `project_trust` handler. See **New in 0.79.x — project_trust event** below. Example: `packages/coding-agent/examples/extensions/project-trust.ts`.
-- "Can my extension tell whether the user trusted the project?" → `ctx.isProjectTrusted()` (`extensions/types.ts:329, :1541`). Reflects the live decision including `--approve` overrides and temporary trust, not just persisted `trust.json`.
+- "Can my extension tell whether the user trusted the project?" → `ctx.isProjectTrusted()` (`extensions/types.ts:331, :1541`). Reflects the live decision including `--approve` overrides and temporary trust, not just persisted `trust.json`.
 - "What mode am I in?" → `ctx.mode` is `"tui" | "rpc" | "json" | "print"`. Combined with the (since 0.78.0) `hasUI=true` in RPC, `ctx.mode === "tui"` is the right discriminator for true-TUI behaviour. Don't gate dialogs on `hasUI` alone in RPC — you'll get a hung dialog; pair with `ctx.mode`.
-- "How do I distinguish manual vs threshold vs overflow compaction?" → 0.79.10 added `reason: "manual" | "threshold" | "overflow"` and `willRetry: boolean` to `session_before_compact` (`extensions/types.ts:584-592`) and `session_compact` (`:589-596`). `willRetry` is set when the aborted turn is retried after overflow-triggered compaction.
+- "How do I distinguish manual vs threshold vs overflow compaction?" → 0.79.10 added `reason: "manual" | "threshold" | "overflow"` and `willRetry: boolean` to `session_before_compact` (`extensions/types.ts:586-594`) and `session_compact` (`:591-598`). `willRetry` is set when the aborted turn is retried after overflow-triggered compaction.
 - "Why is my extension factory starting a background process I never see closed?" → 0.79.7 docs added a discipline rule: factories may run in invocations that never start a session (e.g., `pi --list-models`). **Don't** start processes / sockets / file watchers / timers from the factory. Defer to `session_start`; register an idempotent `session_shutdown` handler to close them. See `docs/extensions.md` “Long-lived resources and shutdown”.
-- "Can my custom autocomplete open without a slash prefix?" → Yes since 0.79.1. Provider factories can declare `triggerCharacters: ["#", "$"]`; pi merges them in `interactive-mode.ts:664-670`.
+- "Can my custom autocomplete open without a slash prefix?" → Yes since 0.79.1. Provider factories can declare `triggerCharacters: ["#", "$"]`; pi merges them in `interactive-mode.ts:660-666`.
 
 ## New in 0.79.x — project_trust event
 
 A pre-resource hook that lets user/global and CLI `-e` extensions decide whether to load project-local `.pi/` resources. Fires before any project-local extension is loaded, so project-local extensions cannot participate.
 
-**Event shape** (`extensions/types.ts:516-538`):
+**Event shape** (`extensions/types.ts:518-540`):
 
 ```ts
 interface ProjectTrustEvent { type: "project_trust"; cwd: string }
@@ -61,9 +61,9 @@ type  ProjectTrustEventDecision = "yes" | "no" | "undecided";
 interface ProjectTrustEventResult { trusted: ProjectTrustEventDecision; remember?: boolean }
 ```
 
-**Registration:** `pi.on("project_trust", handler)` (`extensions/types.ts:1165`).
+**Registration:** `pi.on("project_trust", handler)` (`extensions/types.ts:1219`).
 
-**Context (limited):** the handler receives a `ProjectTrustContext` — only `{ cwd, mode, hasUI, ui: { select, confirm, input, notify } }` (`extensions/types.ts:528-533`). **No `sessionManager`, no `getSystemPrompt`, no full UI surface.** Designed for a fast yes/no decision.
+**Context (limited):** the handler receives a `ProjectTrustContext` — only `{ cwd, mode, hasUI, ui: { select, confirm, input, notify } }` (`extensions/types.ts:530-535`). **No `sessionManager`, no `getSystemPrompt`, no full UI surface.** Designed for a fast yes/no decision.
 
 **Resolution semantics:** first user/global or CLI extension that returns `"yes"` or `"no"` owns the decision (`core/project-trust.ts:54-70`). `remember: true` persists the decision into `~/.pi/agent/trust.json`. Returning `"undecided"` defers to later handlers or the built-in flow.
 

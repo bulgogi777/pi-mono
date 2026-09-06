@@ -1,6 +1,6 @@
 # RPC Protocol
 
-The full wire-protocol reference for `pi --mode rpc`. All cites against pi-mono at the current pin (`v0.84.1`, `53fa77cc`). The wire schema is defined in **one** file: `packages/coding-agent/src/modes/rpc/rpc-types.ts` (289 lines at `v0.84.1`, the entire union of every command, response, event, and extension-UI message). The dispatcher is `packages/coding-agent/src/modes/rpc/rpc-mode.ts` (817 lines). The framer is `jsonl.ts` (58 lines). Canonical doc: `packages/coding-agent/docs/rpc.md`.
+The full wire-protocol reference for `pi --mode rpc`. All cites against pi-mono at the current pin (`v0.85.1`, `d981de12`). The wire schema is defined in **one** file: `packages/coding-agent/src/modes/rpc/rpc-types.ts` (297 lines at `v0.85.1`, the entire union of every command, response, event, and extension-UI message) — **with one exception: the `message_update` payload is shaped by `modes/json-event.ts`, not by `rpc-types.ts`.** The dispatcher is `packages/coding-agent/src/modes/rpc/rpc-mode.ts` (821 lines). The framer is `jsonl.ts` (58 lines). Canonical doc: `packages/coding-agent/docs/rpc.md`.
 
 ## Framing
 
@@ -31,13 +31,13 @@ This pattern generalises to any framed-protocol-over-stdio subprocess (panel-mem
 
 ## Request/response correlation
 
-Every `RpcCommand` has an optional `id?: string` (`rpc-types.ts:21`). When set, the `RpcResponse` echoes the same `id` (`rpc-types.ts:110+`). Hosts SHOULD set `id` on every command and demultiplex by it; the schema also permits omitting `id` for fire-and-forget hosts.
+Every `RpcCommand` has an optional `id?: string` (`rpc-types.ts:21`). When set, the `RpcResponse` echoes the same `id` (`rpc-types.ts:111+`). Hosts SHOULD set `id` on every command and demultiplex by it; the schema also permits omitting `id` for fire-and-forget hosts.
 
 Events (the `AgentSessionEvent` stream — see below) **never** carry an `id`. They are unsolicited stdout traffic.
 
 ## RpcCommand catalog
 
-The discriminated union is `RpcCommand` at `rpc-types.ts:19-71`. Per-command handler dispatch is the `switch (command.type)` block in `rpc-mode.ts:handleCommand` (`rpc-mode.ts:375-723`). The grouping below mirrors the type file; `Lines` points to the type-union variant in `rpc-types.ts`; `Handler` points to the case body in `rpc-mode.ts`.
+The discriminated union is `RpcCommand` at `rpc-types.ts:19-72`. Per-command handler dispatch is the `switch (command.type)` block in `rpc-mode.ts:handleCommand` (`rpc-mode.ts:375-727`). The grouping below mirrors the type file; `Lines` points to the type-union variant in `rpc-types.ts`; `Handler` points to the case body in `rpc-mode.ts`.
 
 ### Prompting (responses are async)
 
@@ -46,8 +46,9 @@ The discriminated union is `RpcCommand` at `rpc-types.ts:19-71`. Per-command han
 | `prompt` | `message`, `images?`, `streamingBehavior?` | `:21` | `rpc-mode.ts:380-402` | (no `data`) | Authoritative `success: true` is emitted only after the prompt **preflight** succeeds (`rpc-mode.ts:383-397`). If the agent is already streaming and `streamingBehavior` is missing, fails. |
 | `steer` | `message`, `images?` | `:22` | `rpc-mode.ts:404-408` | — | Queue while streaming, delivered after the current assistant turn finishes its tool calls, before the next LLM call. Skill / template expansion runs; extension commands rejected. |
 | `follow_up` | `message`, `images?` | `:23` | `rpc-mode.ts:409-413` | — | Queue until the agent is fully idle, then deliver. |
-| `abort` | — | `:24` | `rpc-mode.ts:414-418` | — | Cancels the running agent (sets the abort signal). Does not wait for completion. |
-| `new_session` | `parentSession?` | `:25` | `rpc-mode.ts:419-431` | `{ cancelled: boolean }` | Cancellable via `session_before_switch` hook. `cancelled: true` means an extension vetoed. |
+| `abort` | — | `:24` | `rpc-mode.ts:428-431` | — | Cancels the running agent. **Changed in 0.85.x: it now AWAITS `session.abort()` and responds only once the session is idle** (`rpc-mode.ts:429`; `docs/rpc.md`: "Abort the current operation and wait for the session to become idle before responding"). A client that assumed an immediate response — the documented behavior at v0.84.1 and earlier — will now block until the turn actually unwinds. Note `abort` **continues** any queued messages that remain in the session; clear them first if that is not what you want. |
+| `clear_queue` | — | `:26` | `rpc-mode.ts:433-435` | `{ steering: string[], followUp: string[] }` | **New in 0.84.4.** Removes queued steering + follow-up messages and **returns their text** so the client can restore it in an editor. Delegates to `AgentSession.clearQueue()` (`core/agent-session.ts:1587`). Creates no turn. Canonical Esc-key recipe (`docs/rpc.md`): send `clear_queue` **then** `abort`, and put the returned strings back in the editor. |
+| `new_session` | `parentSession?` | `:27` | `rpc-mode.ts:437-449` | `{ cancelled: boolean }` | Cancellable via `session_before_switch` hook. `cancelled: true` means an extension vetoed. |
 
 ### Streaming behavior
 
@@ -57,75 +58,75 @@ The discriminated union is `RpcCommand` at `rpc-types.ts:19-71`. Per-command han
 
 | `type` | Lines | Handler | Response data |
 |---|---|---|---|
-| `get_state` | `:28` | `rpc-mode.ts:432-453` | `RpcSessionState` (`rpc-types.ts:95-108`): `model`, `thinkingLevel`, `isStreaming`, `isCompacting`, `steeringMode`, `followUpMode`, `sessionFile`, `sessionId`, `sessionName`, `autoCompactionEnabled`, `messageCount`, `pendingMessageCount`. |
-| `get_messages` | `:67` | `rpc-mode.ts:636-643` | `{ messages: AgentMessage[] }` |
-| `get_session_stats` | `:56` | `rpc-mode.ts:559-579` | `SessionStats` (`agent-session.ts`) |
-| `get_last_assistant_text` | `:63` | `rpc-mode.ts:618-622` | `{ text: string \| null }` |
-| `get_fork_messages` | `:62` | `rpc-mode.ts:605-617` | `{ messages: Array<{ entryId, text }> }` — for fork-target picker UIs. |
-| `get_commands` | `:70` | `rpc-mode.ts:644-…` | `{ commands: RpcSlashCommand[] }` (`rpc-types.ts:79-87`) |
-| `get_available_models` | `:32` | `rpc-mode.ts:472-480` | `{ models: Model<any>[] }` |
+| `get_state` | `:29` | `rpc-mode.ts:436-457` | `RpcSessionState` (`rpc-types.ts:96-109`): `model`, `thinkingLevel`, `isStreaming`, `isCompacting`, `steeringMode`, `followUpMode`, `sessionFile`, `sessionId`, `sessionName`, `autoCompactionEnabled`, `messageCount`, `pendingMessageCount`. |
+| `get_messages` | `:68` | `rpc-mode.ts:640-647` | `{ messages: AgentMessage[] }` |
+| `get_session_stats` | `:56` | `rpc-mode.ts:563-583` | `SessionStats` (`agent-session.ts`) |
+| `get_last_assistant_text` | `:63` | `rpc-mode.ts:622-626` | `{ text: string \| null }` |
+| `get_fork_messages` | `:62` | `rpc-mode.ts:609-621` | `{ messages: Array<{ entryId, text }> }` — for fork-target picker UIs. |
+| `get_commands` | `:70` | `rpc-mode.ts:648-…` | `{ commands: RpcSlashCommand[] }` (`rpc-types.ts:80-88`) |
+| `get_available_models` | `:33` | `rpc-mode.ts:476-484` | `{ models: Model<any>[] }` |
 
 ### Model / thinking
 
 | `type` | Args | Lines | Handler | Response |
 |---|---|---|---|---|
-| `set_model` | `provider`, `modelId` | `:32` | `rpc-mode.ts:454-463` | `data: Model<any>` |
-| `cycle_model` | — | `:34` | `rpc-mode.ts:464-471` | `data: { model, thinkingLevel, isScoped } \| null` |
-| `set_thinking_level` | `level: ThinkingLevel` | `:37` | `rpc-mode.ts:481-485` | (no `data`) |
-| `cycle_thinking_level` | — | `:38` | `rpc-mode.ts:486-497` | `data: { level } \| null` |
+| `set_model` | `provider`, `modelId` | `:32` | `rpc-mode.ts:458-467` | `data: Model<any>` |
+| `cycle_model` | — | `:34` | `rpc-mode.ts:468-475` | `data: { model, thinkingLevel, isScoped } \| null` |
+| `set_thinking_level` | `level: ThinkingLevel` | `:37` | `rpc-mode.ts:485-489` | (no `data`) |
+| `cycle_thinking_level` | — | `:38` | `rpc-mode.ts:490-501` | `data: { level } \| null` |
 
 ### Queue modes
 
 | `type` | Args | Lines | Handler |
 |---|---|---|---|
-| `set_steering_mode` | `mode: "all" \| "one-at-a-time"` | `:41` | `rpc-mode.ts:498-502` |
-| `set_follow_up_mode` | `mode: "all" \| "one-at-a-time"` | `:42` | `rpc-mode.ts:503-513` |
+| `set_steering_mode` | `mode: "all" \| "one-at-a-time"` | `:41` | `rpc-mode.ts:502-506` |
+| `set_follow_up_mode` | `mode: "all" \| "one-at-a-time"` | `:42` | `rpc-mode.ts:507-517` |
 
 ### Compaction / retry
 
 | `type` | Args | Lines | Handler | Response |
 |---|---|---|---|---|
-| `compact` | `customInstructions?` | `:45` | `rpc-mode.ts:517-522` | `data: CompactionResult` |
-| `set_auto_compaction` | `enabled: boolean` | `:46` | `rpc-mode.ts:522-531` | — |
-| `set_auto_retry` | `enabled: boolean` | `:49` | `rpc-mode.ts:531-536` | — |
-| `abort_retry` | — | `:50` | `rpc-mode.ts:536-545` | — |
+| `compact` | `customInstructions?` | `:45` | `rpc-mode.ts:521-526` | `data: CompactionResult` |
+| `set_auto_compaction` | `enabled: boolean` | `:46` | `rpc-mode.ts:526-535` | — |
+| `set_auto_retry` | `enabled: boolean` | `:49` | `rpc-mode.ts:535-540` | — |
+| `abort_retry` | — | `:50` | `rpc-mode.ts:540-549` | — |
 
 ### Bash
 
 | `type` | Args | Lines | Handler | Response |
 |---|---|---|---|---|
-| `bash` | `command: string` | `:53` | `rpc-mode.ts:545-550` | `data: BashResult` |
-| `abort_bash` | — | `:54` | `rpc-mode.ts:550-559` | — |
+| `bash` | `command: string` | `:53` | `rpc-mode.ts:549-554` | `data: BashResult` |
+| `abort_bash` | — | `:54` | `rpc-mode.ts:554-563` | — |
 
 ### Session manipulation
 
 | `type` | Args | Lines | Handler | Response |
 |---|---|---|---|---|
-| `export_html` | `outputPath?` | `:57` | `rpc-mode.ts:553-584` | `data: { path: string }` |
-| `switch_session` | `sessionPath: string` | `:58` | `rpc-mode.ts:580-592` | `data: { cancelled: boolean }` — cancellable via `session_before_switch` |
-| `fork` | `entryId: string` | `:59` | `rpc-mode.ts:593-601` | `data: { text: string; cancelled: boolean }` — cancellable via `session_before_fork` |
-| `clone` | — | `:60` | `rpc-mode.ts:601-604` | `data: { cancelled: boolean }` |
-| `set_session_name` | `name: string` | `:64` | `rpc-mode.ts:611-635` | — |
+| `export_html` | `outputPath?` | `:57` | `rpc-mode.ts:557-588` | `data: { path: string }` |
+| `switch_session` | `sessionPath: string` | `:58` | `rpc-mode.ts:584-596` | `data: { cancelled: boolean }` — cancellable via `session_before_switch` |
+| `fork` | `entryId: string` | `:59` | `rpc-mode.ts:597-605` | `data: { text: string; cancelled: boolean }` — cancellable via `session_before_fork` |
+| `clone` | — | `:60` | `rpc-mode.ts:605-608` | `data: { cancelled: boolean }` |
+| `set_session_name` | `name: string` | `:64` | `rpc-mode.ts:615-639` | — |
 
 `fork` performs an in-place leaf-move-plus-summary inside the same `.jsonl`. The new-file `forkFrom` operation lives behind `--fork` at startup, not behind this RPC command — see **pi-sessions** for the in-place-vs-new-file distinction.
 
 ### Generic error response
 
-Any command can fail with `{ id, type: "response", command, success: false, error: string }` (`rpc-types.ts:110+`). Parse failures (malformed JSON line) come back with `command: "parse"` (`rpc.md:1191-1199`).
+Any command can fail with `{ id, type: "response", command, success: false, error: string }` (`rpc-types.ts:111+`). Parse failures (malformed JSON line) come back with `command: "parse"` (`rpc.md:1231-1239`).
 
 ## Event stream
 
-Pi emits the `AgentSessionEvent` union (`packages/coding-agent/src/core/agent-session.ts:141-183`, also documented at `packages/coding-agent/docs/json.md:11-21`). It composes the base `AgentEvent` from `packages/agent/src/types.ts:426` plus pi-coding-agent-specific events. Events have no `id` field.
+Pi emits the `AgentSessionEvent` union (`packages/coding-agent/src/core/agent-session.ts:144-185`, also documented at `packages/coding-agent/docs/json.md:11-25`). It composes the base `AgentEvent` from `packages/agent/src/types.ts:429` plus pi-coding-agent-specific events. Events have no `id` field.
 
 | Event `type` | Payload | Emitted when |
 |---|---|---|
 | `agent_start` | — | Agent begins processing a prompt. |
-| `agent_end` | `messages: AgentMessage[]`, `willRetry: boolean` | The agent loop finished a run. `willRetry: true` means an auto-compaction/retry will re-enter the loop, so this is **not** terminal. Payload gained `willRetry` in 0.80.x (`agent-session.ts:144-147`; predicate `_willRetryAfterAgentEnd` at `:662`, terminal `stopReason !== "stop"` at `:1975`). |
-| `agent_settled` | — | **New in 0.80.x** (`agent-session.ts:148`). Emitted once, *after* the final `agent_end`, when the loop has fully drained (steering + follow-up queues empty, no retry pending). Emitted at `agent-session.ts:599-600` via `_emitAgentSettled()` (`:1061`). This — not `agent_end` — is what `RpcClient.waitForIdle()` now resolves on. |
+| `agent_end` | `messages: AgentMessage[]`, `willRetry: boolean` | The agent loop finished a run. `willRetry: true` means an auto-compaction/retry will re-enter the loop, so this is **not** terminal. Payload gained `willRetry` in 0.80.x (`agent-session.ts:147-150`; predicate `_willRetryAfterAgentEnd` at `:695`, terminal `stopReason !== "stop"` at `:2145`). |
+| `agent_settled` | — | **New in 0.80.x** (`agent-session.ts:151`). Emitted once, *after* the final `agent_end`, when the loop has fully drained (steering + follow-up queues empty, no retry pending). Emitted at `agent-session.ts:632-633` via `_emitAgentSettled()` (`:1103`). This — not `agent_end` — is what `RpcClient.waitForIdle()` now resolves on. |
 | `turn_start` | — | Each turn begins (one assistant response + its tool results). |
 | `turn_end` | `message: AgentMessage`, `toolResults: ToolResultMessage[]` | Each turn completes. |
 | `message_start` | `message: AgentMessage` | Any message (user / assistant / toolResult) begins. |
-| `message_update` | `message: AgentMessage`, `assistantMessageEvent: AssistantMessageEvent` | Streaming delta during assistant message. The `assistantMessageEvent` field is the **delta sub-event** — see next table. |
+| `message_update` | `usage: Usage`, `assistantMessageEvent` | Streaming delta during assistant message. **Carries NO `message` field** — removed in 0.84.0. **`usage` (top-level) was ADDED in 0.85.x**: latest cumulative provider-reported usage, which may stay all-zero until completion for providers that don't report usage mid-stream (`docs/rpc.md`). The `assistantMessageEvent` field is the **delta sub-event** — see next table. |
 | `message_end` | `message: AgentMessage` | Message finalized. |
 | `tool_execution_start` | `toolCallId`, `toolName`, `args` | Tool implementation begins. |
 | `tool_execution_update` | `toolCallId`, `toolName`, `args`, `partialResult` | Tool emits partial output. `partialResult` is the **accumulated** state, not the delta — clients can replace their display on each event. |
@@ -139,22 +140,28 @@ Pi emits the `AgentSessionEvent` union (`packages/coding-agent/src/core/agent-se
 
 ### `assistantMessageEvent` delta types
 
-The `message_update` event's `assistantMessageEvent` field is itself a discriminated union. Documented at `rpc.md:826-841`:
+The `message_update` event's `assistantMessageEvent` field is itself a discriminated union.
 
-| `type` | Payload (highlights) | Meaning |
+> ⚠ **The LIBRARY type and the WIRE shape differ, and reading the wrong one is the standard mistake here.** `AssistantMessageEvent` at `packages/ai/src/types.ts:546-562` still declares `partial: AssistantMessage` on ten of its twelve variants — that is what an **in-process SDK** consumer (`AgentSession`) receives. The **RPC / JSON wire** strips it: `modes/json-event.ts:20-37` (`toJsonAssistantMessageEvent`) deletes `partial` from every variant that has it, and `toJsonEvent` (`:47-61`) rebuilds `message_update` as `{ type, usage, assistantMessageEvent }` — dropping the cumulative `message` too. Applied in RPC at `modes/rpc/rpc-mode.ts` and in print mode at `modes/print-mode.ts`. **So: cite `types.ts` for SDK consumers, `json-event.ts` for wire consumers. `rpc-types.ts` will not tell you — it had an empty diff across the release that made this change.**
+
+Wire shape (post-strip), which is what an RPC client actually parses:
+
+| `type` | Wire payload | Meaning |
 |---|---|---|
-| `start` | `partial` | Assistant message generation started. |
-| `text_start` | `contentIndex`, `partial` | New text content block opened. |
-| `text_delta` | `contentIndex`, `delta`, `partial` | Text chunk appended. |
-| `text_end` | `contentIndex`, `content`, `partial` | Text block closed. |
-| `thinking_start` / `thinking_delta` / `thinking_end` | (analogous) | Extended-thinking content block. |
-| `toolcall_start` | `contentIndex`, `partial` | New tool call block opened. |
-| `toolcall_delta` | `contentIndex`, `delta`, `partial` | Tool-call argument JSON chunk. |
-| `toolcall_end` | `contentIndex`, `toolCall`, `partial` | Tool call closed; full `toolCall` available. |
-| `done` | `reason: "stop" \| "length" \| "toolUse"` | Message complete. |
-| `error` | `reason: "aborted" \| "error"` | Stream errored or was aborted. |
+| `start` | — | Assistant message generation started. |
+| `text_start` | `contentIndex` | New text content block opened. |
+| `text_delta` | `contentIndex`, `delta` | Text chunk appended. |
+| `text_end` | `contentIndex`, `content` | Text block closed. |
+| `thinking_start` / `thinking_delta` / `thinking_end` | (analogous to text) | Extended-thinking content block. |
+| `toolcall_start` | `contentIndex`, **`id`**, **`toolName`** | New tool call block opened. **`id` + `toolName` ADDED in 0.85.x** (`json-event.ts:24-30`, lifted off `partial.content[contentIndex]` before the strip). Before this, `toolcall_start` carried only `contentIndex` and was not a viable carrier for anything — a client had to wait for `toolcall_end` to learn which tool was being called. |
+| `toolcall_delta` | `contentIndex`, `delta` | Tool-call argument JSON chunk. |
+| `toolcall_end` | `contentIndex`, `toolCall` | Tool call closed; full `toolCall` available. |
+| `done` | `reason: "stop" \| "length" \| "toolUse" \| "deferred"`, `message` | Message complete. Note `"deferred"` is in the union at `types.ts:557-560`. |
+| `error` | `reason: "aborted" \| "error"`, `error` | Stream errored or was aborted. |
 
 Typical streaming text response wire trace: `start` → `text_start` → many `text_delta` → `text_end` → `done`. With tools: `start` → maybe text → `toolcall_start` → many `toolcall_delta` → `toolcall_end` → `done(toolUse)`.
+
+**Assembling a live partial message on the wire:** you must accumulate it yourself from `message_start` + deltas keyed by `contentIndex`; `message_end.message` is authoritative. There is no cumulative snapshot on `message_update` any more.
 
 ## Cross-references
 
