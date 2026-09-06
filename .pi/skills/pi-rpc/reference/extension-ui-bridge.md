@@ -78,6 +78,10 @@ The `parseResponse` callback in `createDialogPromise` translates these into the 
 
 ## Hang-debugging checklist
 
+> **First, on 0.85.x+: make the wait observable instead of inferring it.** The `ui_prompt_start` / `ui_prompt_end` hook events (added 0.85.x, `extensions/types.ts:748-761`, emitted from `runner.ts:453-486`) announce exactly when pi begins and stops blocking on a user-facing extension UI prompt, carrying `kind` (`select` / `confirm` / `input` / `editor` / `custom`) and an optional `title`. **A `ui_prompt_start` with no matching `ui_prompt_end` localises the hang to a specific prompt** and tells you which method to look for below — turning items 2-5 from guesswork into a lookup. Register a tiny logging extension for these two events when diagnosing.
+>
+> Three caveats before you build on them: they are **outermost-only** (depth-tracked — nested `ctx.ui` calls emit ONE pair), they are **balanced even when the prompt throws**, and they are **fire-and-forget** (`queueMicrotask`, return value discarded) so they can observe a hang but never prevent or answer one. Full semantics: **pi-extensions** `reference/hook-events.md` § UI / user input.
+
 When an extension hangs in RPC mode, the cause is almost always one of:
 
 1. **Host isn't reading stdout, or is reading line-naively.** If the host uses Node `readline`, a U+2028 in a payload will desync the framer (see `reference/protocol.md` framing section). Switch to `attachJsonlLineReader` or equivalent.
