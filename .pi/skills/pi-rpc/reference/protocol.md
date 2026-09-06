@@ -46,7 +46,7 @@ The discriminated union is `RpcCommand` at `rpc-types.ts:19-72`. Per-command han
 | `prompt` | `message`, `images?`, `streamingBehavior?` | `:21` | `rpc-mode.ts:380-402` | (no `data`) | Authoritative `success: true` is emitted only after the prompt **preflight** succeeds (`rpc-mode.ts:383-397`). If the agent is already streaming and `streamingBehavior` is missing, fails. |
 | `steer` | `message`, `images?` | `:22` | `rpc-mode.ts:404-408` | — | Queue while streaming, delivered after the current assistant turn finishes its tool calls, before the next LLM call. Skill / template expansion runs; extension commands rejected. |
 | `follow_up` | `message`, `images?` | `:23` | `rpc-mode.ts:409-413` | — | Queue until the agent is fully idle, then deliver. |
-| `abort` | — | `:24` | `rpc-mode.ts:428-431` | — | Cancels the running agent. **Changed in 0.85.x: it now AWAITS `session.abort()` and responds only once the session is idle** (`rpc-mode.ts:429`; `docs/rpc.md`: "Abort the current operation and wait for the session to become idle before responding"). A client that assumed an immediate response — the documented behavior at v0.84.1 and earlier — will now block until the turn actually unwinds. Note `abort` **continues** any queued messages that remain in the session; clear them first if that is not what you want. |
+| `abort` | — | `:24` | `rpc-mode.ts:428-431` | — | Cancels the running agent and **responds only once the session is idle** — `await session.abort()` (`rpc-mode.ts:429`). **This is NOT new**: the handler is byte-identical at `v0.84.1` and `v0.85.1`, and has awaited since the RPC rewrite (`3559a43ba`). What 0.85.0 changed is *what idle means* — see the note below. Note `abort` **continues** any queued messages that remain in the session; it clears no queue. Send `clear_queue` first if that is not what you want. |
 | `clear_queue` | — | `:26` | `rpc-mode.ts:433-435` | `{ steering: string[], followUp: string[] }` | **New in 0.84.4.** Removes queued steering + follow-up messages and **returns their text** so the client can restore it in an editor. Delegates to `AgentSession.clearQueue()` (`core/agent-session.ts:1587`). Creates no turn. Canonical Esc-key recipe (`docs/rpc.md`): send `clear_queue` **then** `abort`, and put the returned strings back in the editor. |
 | `new_session` | `parentSession?` | `:27` | `rpc-mode.ts:437-449` | `{ cancelled: boolean }` | Cancellable via `session_before_switch` hook. `cancelled: true` means an extension vetoed. |
 
@@ -160,6 +160,19 @@ Wire shape (post-strip), which is what an RPC client actually parses:
 | `error` | `reason: "aborted" \| "error"`, `error` | Stream errored or was aborted. |
 
 Typical streaming text response wire trace: `start` → `text_start` → many `text_delta` → `text_end` → `done`. With tools: `start` → maybe text → `toolcall_start` → many `toolcall_delta` → `toolcall_end` → `done(toolUse)`.
+
+> **What 0.85.0 actually changed about `abort` — and the claim it replaces.** A prior revision of this page said *"Changed in 0.85.x: it now AWAITS `session.abort()` and responds only once the session is idle … a client that assumed an immediate response will now block."* **That was wrong** (corrected 2026-09-06, same day it was written). `rpc-mode.ts:428-431` is byte-identical between `v0.84.1` and `v0.85.1`; the `await` long predates both. The error was reading a **docs rewording** as a behaviour change — `docs/rpc.md` went from "Abort the current agent operation." to "Abort the current operation and wait for the session to become idle before responding" in the same commit described below.
+>
+> The real 0.85.0 change is narrower: commit `bea67d90d` ("cancel compaction on session abort", upstream #8920) folded **compaction and branch summarization into idle tracking**.
+>
+> | | `v0.84.1` | `v0.85.1` |
+> |---|---|---|
+> | `isIdle` | `!this._isAgentRunActive` (`agent-session.ts:883-885`) | `!this._isAgentRunActive && !this.isCompacting` (`:925-927`) |
+> | `abort()` | did not cancel compaction | `abortRetry(); abortCompaction(); abortBranchSummary(); agent.abort(); await waitForIdle();` (`:1619-1625`) |
+>
+> **Consumer consequence:** `abort` still returns only when idle, exactly as before — but an abort landing while auto-compaction or a branch summary is running now waits for *that* to cancel too, so settle can take longer than pre-0.85.0. Nothing about queue semantics changed in this range.
+>
+> **Method lesson, since this cost a peer a merge gate:** gate 6 says to diff the contract docs rather than only the types, because prose states removals the types miss. This is the inverse failure — **prose can also state a clarification that reads like a change.** When `docs/rpc.md` reports a behaviour delta, diff the implementation for that release before recording it as one.
 
 **Assembling a live partial message on the wire:** you must accumulate it yourself from `message_start` + deltas keyed by `contentIndex`; `message_end.message` is authoritative. There is no cumulative snapshot on `message_update` any more.
 
