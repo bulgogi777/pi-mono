@@ -1,6 +1,6 @@
 # Provider/Model CLI Flags
 
-CLI flags for selecting providers, models, and credentials. All cites against pi-mono at the current pin (`v0.84.1`, `53fa77cc`). Parser: `parseArgs` at `packages/coding-agent/src/cli/args.ts`. Resolver: `resolveCliModel` at `packages/coding-agent/src/core/model-resolver.ts:361-…`.
+CLI flags for selecting providers, models, and credentials. All cites against pi-mono at the current pin (`v0.85.1`, `d981de12`). Parser: `parseArgs` at `packages/coding-agent/src/cli/args.ts`. Resolver: `resolveCliModel` at `packages/coding-agent/src/core/model-resolver.ts:361-…`.
 
 This file covers **provider/model flags only**. For session flags (`--continue`, `--resume`, `--fork`, `--session*`, `--no-session`) see **pi-sessions** `reference/cli-flags.md`. For resource flags (`--skill`, `--prompt-template`, `--system-prompt`, `--no-context-files`, etc.) see **pi-architecture** `reference/cli-flags.md`.
 
@@ -8,12 +8,12 @@ This file covers **provider/model flags only**. For session flags (`--continue`,
 
 | Flag | Short | Args | Lines | Effect |
 |---|---|---|---|---|
-| `--provider <id>` | — | required | `args.ts:85-86` | Force provider id (e.g. `anthropic`, `openai`, `openrouter`). Must be a `KnownProvider` (`packages/ai/src/types.ts:35-75`), in `models.json`, or registered by an extension. |
-| `--model <pattern>` | — | required | `args.ts:87-88` | Model id, `provider/id`, or glob/fuzzy pattern. Optional `:thinking-level` suffix. |
-| `--api-key <value>` | — | required | `args.ts:89-90` | Runtime override for the resolved provider's key. Highest priority (priority 1 in `auth-storage.ts:getApiKey` at `:480-543`). |
-| `--models <patterns>` | — | required | `args.ts:104-105` | Comma-separated patterns for the Ctrl+P cycling list and `cycle_model` RPC command. |
-| `--list-models [search]` | — | optional | `args.ts:151-158` | List available models with optional fuzzy search; exits without starting a session. |
-| `--thinking <level>` | — | required | `args.ts:108-109` | Set thinking level: `off` / `minimal` / `low` / `medium` / `high` / `xhigh`. Clamped to model capabilities. |
+| `--provider <id>` | — | required | `args.ts:100-101` | Force provider id (e.g. `anthropic`, `openai`, `openrouter`). Must be a `KnownProvider` (`packages/ai/src/types.ts:35-75`), in `models.json`, or registered by an extension. |
+| `--model <pattern>` | — | required | `args.ts:102-103` | Model id, `provider/id`, or glob/fuzzy pattern. Optional `:thinking-level` suffix. |
+| `--api-key <value>` | — | required | `args.ts:104-105` | Runtime override for the resolved provider's key. Highest priority (priority 1 in `auth-storage.ts:getApiKey` at `:502-573`). |
+| `--models <patterns>` | — | required | `args.ts:119-120` | Comma-separated patterns for the Ctrl+P cycling list and `cycle_model` RPC command. |
+| `--list-models [search]` | — | optional | `args.ts:166-173` | List available models with optional fuzzy search; exits without starting a session. |
+| `--thinking <level>` | — | required | `args.ts:123-124` | Set thinking level: `off` / `minimal` / `low` / `medium` / `high` / `xhigh`. Clamped to model capabilities. |
 
 ## `--model <pattern>` — exact, scoped, glob, fuzzy
 
@@ -49,7 +49,7 @@ Comma-separated list of patterns. Same glob and fuzzy semantics as `--model` per
 The list is stored on the session and used by:
 
 - **TUI**: Ctrl+P cycles through the list.
-- **RPC**: `cycle_model` command (`packages/coding-agent/src/modes/rpc/rpc-types.ts:33`).
+- **RPC**: `cycle_model` command (`packages/coding-agent/src/modes/rpc/rpc-types.ts:34`).
 - **Settings file**: persisted so subsequent runs preserve the cycling list.
 
 Examples:
@@ -88,13 +88,13 @@ Exits without starting a session. Useful for scripting (`pi --list-models gpt-5 
 
 ## Interaction with auth resolution
 
-Once provider and model are selected, pi resolves a credential via `ModelRuntime.getAuth(providerId)` (`model-runtime.ts:470-472`) → `composeApiKeyAuth` (`provider-composer.ts:301`). (`AuthStorage.getApiKey` was removed in v0.80.8, `9993c969`.) Order — re-derived at v0.82.1, see `reference/auth-resolution.md`:
+Once provider and model are selected, pi resolves a credential via `ModelRuntime.getAuth(providerId)` (`model-runtime.ts:470-472`) → `composeApiKeyAuth` (`provider-composer.ts:310`). (`AuthStorage.getApiKey` was removed in v0.80.8, `9993c969`.) Order — re-derived at v0.82.1, see `reference/auth-resolution.md`:
 
-1. Runtime override from `--api-key` (`:465-468`)
-2. `auth.json` `api_key` entry (`:472-474`)
-3. `auth.json` `oauth` entry (`:468-505`, with auto-refresh)
-4. Env var (`:531-533`, mapped via `env-api-keys.ts:110-122`)
-5. `models.json` custom resolver (`:535-538`)
+1. Runtime override from `--api-key` (`:474-477`)
+2. `auth.json` `api_key` entry (`:481-483`)
+3. `auth.json` `oauth` entry (`:477-514`, with auto-refresh)
+4. Env var (`:540-542`, mapped via `env-api-keys.ts:110-122`)
+5. `models.json` custom resolver (`:544-547`)
 
 If all five fail, pi reports "no API key configured for provider X" and refuses to start (or skips that provider during `--list-models` enumeration).
 
@@ -106,7 +106,7 @@ Special case: `anthropic` provider checks `ANTHROPIC_OAUTH_TOKEN` **before** `AN
 - **`--provider` alone uses the default model.** Without `--model`, pi takes `defaultModelPerProvider[provider]` from `model-resolver.ts:20-62`. These IDs are pinned per pi release.
 - **`--api-key` doesn't persist.** Set the env var or use `/login` for cross-session persistence.
 - **`--models` patterns that match nothing fail loudly.** Pi rejects empty resolution to avoid silent misconfiguration.
-- **Anthropic OAuth detection happens during `getApiKey`, not flag parsing.** If you pass `--api-key sk-ant-oat...`, pi WILL detect the OAuth flow at request time (`api/anthropic-messages.ts:843-845`), use Bearer auth, and emit the Claude Code identity preamble. The flag itself is just a string passthrough.
+- **Anthropic OAuth detection happens during `getApiKey`, not flag parsing.** If you pass `--api-key sk-ant-oat...`, pi WILL detect the OAuth flow at request time (`api/anthropic-messages.ts:897-899`), use Bearer auth, and emit the Claude Code identity preamble. The flag itself is just a string passthrough.
 - **`models.json` custom providers don't auto-discover env vars.** Without a matching entry in `env-api-keys.ts`, step 4 is skipped — set `apiKey` in `models.json` to point at an env var explicitly. See `reference/custom-providers.md`.
 
 ## Cross-references
