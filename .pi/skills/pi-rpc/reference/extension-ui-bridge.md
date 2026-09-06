@@ -2,7 +2,7 @@
 
 When pi runs in `--mode rpc`, extensions still call methods on `ctx.ui` (`select`, `confirm`, `input`, `editor`, `notify`, `setStatus`, `setWidget`, `setTitle`, `setEditorText`, …). There is no TUI to render them. The RPC dispatcher fakes the UI by emitting `extension_ui_request` lines on stdout and, for awaitable methods only, waiting for matching `extension_ui_response` lines on stdin. This file is the canonical reference for which methods need a host reply and which don't, including the timeout-and-default semantics that determine "why does my extension hang in RPC mode."
 
-All cites against `packages/coding-agent/src/modes/rpc/rpc-mode.ts` at the current pin (`v0.84.1`, `53fa77cc`). Wire types live in `rpc-types.ts:190-227` (request union) and `:225-228` (response union). Documented at `packages/coding-agent/docs/rpc.md:1008-1207`.
+All cites against `packages/coding-agent/src/modes/rpc/rpc-mode.ts` at the current pin (`v0.85.1`, `d981de12`). Wire types live in `rpc-types.ts:198-235` (request union) and `:233-236` (response union). Documented at `packages/coding-agent/docs/rpc.md:1048-1247`.
 
 ## The two halves
 
@@ -35,7 +35,7 @@ If a host **does** send an `extension_ui_response` with an `id` that doesn't app
 
 | `ctx.ui` method | Wire `method` | Category | Request fields (besides `type`, `id`, `method`) | Response shape | Default on timeout/abort | Source |
 |---|---|---|---|---|---|---|
-| `select(title, options, opts)` | `"select"` | Dialog | `title`, `options[]`, `timeout?` | `{ value: string }` or `{ cancelled: true }` | `undefined` | `rpc-mode.ts:125-128`; types `rpc-types.ts:192` |
+| `select(title, options, opts)` | `"select"` | Dialog | `title`, `options[]`, `timeout?` | `{ value: string }` or `{ cancelled: true }` | `undefined` | `rpc-mode.ts:125-128`; types `rpc-types.ts:200` |
 | `confirm(title, message, opts)` | `"confirm"` | Dialog | `title`, `message`, `timeout?` | `{ confirmed: boolean }` or `{ cancelled: true }` | `false` | `rpc-mode.ts:130-133`; types `:186` |
 | `input(title, placeholder, opts)` | `"input"` | Dialog | `title`, `placeholder?`, `timeout?` | `{ value: string }` or `{ cancelled: true }` | `undefined` | `rpc-mode.ts:135-138`; types `:187-193` |
 | `editor(title, prefill?)` | `"editor"` | Dialog | `title`, `prefill?` | `{ value: string }` or `{ cancelled: true }` | `undefined` (**no signal/timeout** — hand-rolled at `rpc-mode.ts:241-259`) | `rpc-mode.ts:241-259`; types `:194` |
@@ -61,7 +61,7 @@ These are silently no-ops in RPC mode (the extension still calls them; they retu
 
 ## Response shapes (host → pi)
 
-The host MUST send `extension_ui_response` with the matching `id` for dialog methods only. Three shapes (`rpc-types.ts:233-237`):
+The host MUST send `extension_ui_response` with the matching `id` for dialog methods only. Three shapes (`rpc-types.ts:241-245`):
 
 ```jsonc
 // select / input / editor — return a string value
@@ -89,7 +89,7 @@ When an extension hangs in RPC mode, the cause is almost always one of:
 
 ## Cross-references
 
-- Wire types: `rpc-types.ts:190-227` (request) and `:225-228` (response).
+- Wire types: `rpc-types.ts:198-235` (request) and `:233-236` (response).
 - Dispatcher: `rpc-mode.ts:85-259` covers the entire UI bridge (dialog promise machinery, all method implementations, fire-and-forget paths).
 - The `pendingExtensionRequests` map at `rpc-mode.ts:72-75` is where the dispatch reads on incoming responses; the read site lives further down in the stdin handler (search `pendingExtensionRequests.get` in `rpc-mode.ts`).
 - Extension-side authoring (the actual `ctx.ui` API the extension calls) is **pi-extensions** territory — see its `reference/hook-events.md` and the eventual `reference/extension-context.md` (TBW in pi-extensions).

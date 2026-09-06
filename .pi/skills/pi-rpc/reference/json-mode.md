@@ -1,6 +1,6 @@
 # `--mode json` (One-shot Event Stream)
 
-The legacy / lighter-weight sibling of `--mode rpc`. One-shot: pi takes the prompt as an argument, runs to completion, emits the full event stream as JSONL on stdout, then exits. **No command channel** — the host cannot send `steer`, `abort`, `compact`, etc. mid-run. All cites against pi-mono at the current pin (`v0.84.1`, `53fa77cc`). User-facing doc: `packages/coding-agent/docs/json.md`.
+The legacy / lighter-weight sibling of `--mode rpc`. One-shot: pi takes the prompt as an argument, runs to completion, emits the full event stream as JSONL on stdout, then exits. **No command channel** — the host cannot send `steer`, `abort`, `compact`, etc. mid-run. All cites against pi-mono at the current pin (`v0.85.1`, `d981de12`). User-facing doc: `packages/coding-agent/docs/json.md`.
 
 ## Invocation
 
@@ -8,7 +8,7 @@ The legacy / lighter-weight sibling of `--mode rpc`. One-shot: pi takes the prom
 pi --mode json "Your prompt here"
 ```
 
-`--mode` is parsed at `packages/coding-agent/src/cli/args.ts:76-80`; valid values are `"text" | "json" | "rpc"` (`args.ts:11`). When `json`, `main.ts:121-122` selects the `"json"` app mode, which routes to `print-mode.ts` with `mode: "json"` (`main.ts:131`).
+`--mode` is parsed at `packages/coding-agent/src/cli/args.ts:76-80`; valid values are `"text" | "json" | "rpc"` (`args.ts:11`). When `json`, `main.ts:114-115` selects the `"json"` app mode, which routes to `print-mode.ts` with `mode: "json"` (`main.ts:124`).
 
 The implementation lives in `packages/coding-agent/src/modes/print-mode.ts` — the same module that also handles `--mode text`. The split is decided by the `mode` field on `PrintModeOptions` (`print-mode.ts:19-20`):
 
@@ -56,9 +56,9 @@ So the output stream is:
 {"type":"agent_settled"}
 ```
 
-The events are exactly the `AgentSessionEvent` union (`packages/coding-agent/src/core/agent-session.ts:141-183`):
+The events are exactly the `AgentSessionEvent` union (`packages/coding-agent/src/core/agent-session.ts:144-185`):
 
-- `AgentEvent` base: `agent_start`, `agent_end`, `turn_start`, `turn_end`, `message_start`, `message_update`, `message_end`, `tool_execution_start`, `tool_execution_update`, `tool_execution_end`. Note the pi override of `agent_end` adds `willRetry: boolean` (`agent-session.ts:144-147`).
+- `AgentEvent` base: `agent_start`, `agent_end`, `turn_start`, `turn_end`, `message_start`, `message_update`, `message_end`, `tool_execution_start`, `tool_execution_update`, `tool_execution_end`. Note the pi override of `agent_end` adds `willRetry: boolean` (`agent-session.ts:147-150`).
 - pi-coding-agent additions: `agent_settled` (**new in 0.80.x** — the true end-of-run signal, emitted after the final `agent_end`), `queue_update`, `compaction_start`, `compaction_end`, `auto_retry_start`, `auto_retry_end`, `entry_appended`, `session_info_changed`, `thinking_level_changed`.
 
 Same set as RPC mode. The wire format per event is identical to RPC's events (which is documented in `reference/protocol.md`).
@@ -113,7 +113,7 @@ Hosts consuming `--mode json` should be ready for these auxiliary events and not
 ## Cross-references
 
 - Full event-stream catalog (the same events `--mode json` and `--mode rpc` emit): `reference/protocol.md` "Event stream" section.
-- The `AgentSessionEvent` union definition: `packages/coding-agent/src/core/agent-session.ts:141-183`.
+- The `AgentSessionEvent` union definition: `packages/coding-agent/src/core/agent-session.ts:144-185`.
 - The `print-mode.ts` `text` vs `json` split: `packages/coding-agent/src/modes/print-mode.ts:19-20`.
 - For the RPC command channel and full bidirectional protocol: `reference/protocol.md`.
 - For embedding strategy comparison (in-process vs subprocess): `reference/sdk-embedding.md`.

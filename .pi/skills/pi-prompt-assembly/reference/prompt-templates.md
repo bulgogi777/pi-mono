@@ -1,6 +1,6 @@
 # Prompt Templates
 
-How `/template-name` slash commands expand user input before the agent loop sees it. Source-of-truth: `packages/coding-agent/src/core/prompt-templates.ts` (296 lines). All cites against pi-mono at the current pin (`v0.84.1`, `53fa77cc`).
+How `/template-name` slash commands expand user input before the agent loop sees it. Source-of-truth: `packages/coding-agent/src/core/prompt-templates.ts` (296 lines). All cites against pi-mono at the current pin (`v0.85.1`, `d981de12`).
 
 ## What a prompt template is
 
@@ -76,7 +76,7 @@ if (expandPromptTemplates) {
 }
 ```
 
-(Cite: `agent-session.ts:1015-1017`, also at `:1192` and `:1212` for steer/follow-up paths.)
+(Cite: `agent-session.ts:1057-1059`, also at `:1236` and `:1256` for steer/follow-up paths.)
 
 So:
 
@@ -85,7 +85,7 @@ So:
 3. **Prompt templates expand second.** If after skill expansion the result still starts with `/`, prompt template lookup runs.
 4. The expanded text is then handed to the agent loop, which assembles the system prompt (see `reference/assembly-order.md`) and sends to the LLM.
 
-The expansion happens **before** the `input` extension hook fires (`agent-session.ts:987` is `emitInput`, which runs **after** template expansion — so input handlers see the expanded text).
+The expansion happens **before** the `input` extension hook fires (`agent-session.ts:1029` is `emitInput`, which runs **after** template expansion — so input handlers see the expanded text).
 
 The `expandPromptTemplates` flag is `true` by default; the SDK exposes it as a per-prompt option for callers that want raw text passthrough.
 
@@ -122,7 +122,7 @@ User types `/refactor src/foo.ts naming, error handling`. Pi expands to:
 - **`$@` and `$ARGUMENTS` include `$1` etc.** All positional args are concatenated. To exclude `$1`, use `${@:2}`.
 - **No recursive substitution.** Pasting `$ARGUMENTS` as an argument value leaves the literal string in place.
 - **Template lookup failure is silent.** A typo (`/refacotr` instead of `/refactor`) results in the original text passing through unchanged. The agent then sees `/refacotr ...` as a literal user message.
-- **Template name collision**: if global and project both define `/refactor.md`, the **last loaded wins** because the find at `:291` returns the first match in array order (and project comes second per the load order at `:250-251`). So **project beats global** on collision.
+- **Template name collision**: if global and project both define `/refactor.md`, the **last loaded wins** because the find at `:299` returns the first match in array order (and project comes second per the load order at `:252-253`). So **project beats global** on collision.
 - **Skill commands win over templates.** A skill named `foo` with a `/skill:foo` invocation is matched by `_expandSkillCommand` before `expandPromptTemplate` runs. There is no shadowing of skills by templates.
 
 ## Cross-references
