@@ -1,10 +1,10 @@
 # Built-in Providers
 
-Full table of providers pi knows about at the current pin, plus model-selection mechanics. All cites against the current pin (`v0.84.1`, `53fa77cc`).
+Full table of providers pi knows about at the current pin, plus model-selection mechanics. All cites against the current pin (`v0.85.1`, `d981de12`).
 
 ## The `KnownProvider` union (40 providers)
 
-> Count re-verified 2026-08-13 at `v0.84.1` — the union is `packages/ai/src/types.ts:35-74`, now **40**. Two accrued since `v0.82.1`: `baseten` and `qwen-token-plan-individual`. (History: it sat at a documented 28 while the union held 38 — ten had accrued unnoticed.) Re-count this against the union on every `gap-scan`; it drifts silently and no cite check catches it.
+> Count re-verified 2026-09-06 at `v0.85.1` — the union is `packages/ai/src/types.ts:35-74`, still **40** (no providers accrued across 0.84.2 → 0.85.1). Previously re-verified 2026-08-13 at `v0.84.1`, also 40. Two accrued since `v0.82.1`: `baseten` and `qwen-token-plan-individual`. (History: it sat at a documented 28 while the union held 38 — ten had accrued unnoticed.) Re-count this against the union on every `gap-scan`; it drifts silently and no cite check catches it.
 
 Defined at `packages/ai/src/types.ts:35-74` as a string-literal union of provider IDs. The current set:
 
