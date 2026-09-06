@@ -9,13 +9,18 @@ description: >-
   cloudflare-ai-gateway — full KnownProvider in packages/ai/src/types.ts),
   env-var mapping in env-api-keys.ts,
   Anthropic subscription auth and the extra-usage warning at
-  interactive-mode.ts:206,
+  interactive-mode.ts:253,
   --provider / --model / --api-key / --models, /login / /logout, fuzzy /
   glob model matching (resolveModelScope), models.json overrides, or
   pi.registerProvider. Also USE WHEN asked about provider-scoped env: {} blocks in
   auth.json (0.79.5), the global httpProxy setting (0.79.5), Claude Fable
   5 as a first-class Anthropic model (0.79.1), or Mistral session-keyed
-  prompt caching (0.79.8). Also USE WHEN debugging
+  prompt caching (0.79.8). Also USE WHEN asked what changed in the Anthropic
+  auth path in 0.85.x — the impersonated claudeCodeVersion bump (2.1.75 ->
+  2.1.251), getBetaFeatures / mergeClientHeaders extraction and the fact that
+  an explicit anthropic-beta or user-agent header REPLACES the OAuth identity
+  (tested behavior, silently moves billing to extra usage), or auth.json no
+  longer being force-chmodded to 0600 on every write. Also USE WHEN debugging
   out-of-credits with a Max sub or whether pi is using API key vs OAuth. Do NOT use for OAuth
   identity preamble cache (pi-prompt-assembly), hook events
   (pi-extensions), session JSONL (pi-sessions), path discovery
