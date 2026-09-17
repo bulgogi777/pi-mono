@@ -39,6 +39,7 @@ Authoring and debugging reference for pi extensions in the pi-mono repo. Each `r
 - `reference/custom-providers.md` — `pi.registerProvider` deep dive: the four operating modes (replace-models / URL override / OAuth / custom transport), the OAuth contract, registration timing (queued during initial load), and the two worked examples (`custom-provider-anthropic`, `custom-provider-gitlab-duo`). Cross-links to **pi-providers** for auth resolution.
 - `reference/examples-index.md` — survey of the ~75 examples in `packages/coding-agent/examples/extensions/`, grouped by which `register*` / hook each demonstrates, with grep targets.
 - `reference/loading.md` — where pi looks for extensions (`<cwd>/.pi/extensions/`, `~/.pi/agent/extensions/`, npm packages from `settings.json`), the project-first dedup ordering, the `pi.extensions` `package.json` manifest, and inline factory loading.
+- `reference/runtime-module-state.md` — module-instance boundaries between an extension and pi's runtime; why extensions must not rely on pi module-level `Set`/`Map` state, and lifecycle-probe checklist (9358e605).
 
 ## Quick start when asked
 
@@ -46,6 +47,7 @@ Authoring and debugging reference for pi extensions in the pi-mono repo. Each `r
 - "How do I register a tool / command / shortcut / provider / flag / renderer?" → grep `packages/coding-agent/src/core/extensions/types.ts` (around `registerTool` / `registerCommand` / `registerShortcut` / `registerFlag` / `registerProvider` / `registerMessageRenderer`); see `packages/coding-agent/examples/extensions/` for working examples.
 - "Why doesn't my ctx.ui dialog return in RPC mode?" → read `packages/coding-agent/src/modes/rpc/rpc-mode.ts:101-271`. Awaited ui methods (select/confirm/input/editor) need a host response; fire-and-forget methods (notify/setStatus/setWidget/setTitle) never block.
 - "Where does an extension get loaded from?" → `~/.pi/agent/extensions/*.ts`, `<cwd>/.pi/extensions/*.ts`, plus npm `packages` entries in `~/.pi/agent/settings.json`. Loose-`extensions/` directory loads regardless of `settings.json`. Source: `packages/coding-agent/src/core/extensions/loader.ts`.
+- "Can this extension share pi's tracker/cache/registry, or does it own process lifecycle?" → `reference/runtime-module-state.md`. Before building any new apex-app extension tool that touches process lifecycle, tool-registration collisions, or settings, consult this expert against source (1ddfbb42 / 9358e605).
 - "Is there an example of X?" → `ls packages/coding-agent/examples/extensions/`.
 - "How do I auto-trust certain cwds for headless pi?" → install a user/global extension with a `project_trust` handler. See **New in 0.79.x — project_trust event** below. Example: `packages/coding-agent/examples/extensions/project-trust.ts`.
 - "Can my extension tell whether the user trusted the project?" → `ctx.isProjectTrusted()` (`extensions/types.ts:331, :1541`). Reflects the live decision including `--approve` overrides and temporary trust, not just persisted `trust.json`.

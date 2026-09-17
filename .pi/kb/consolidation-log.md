@@ -6,6 +6,28 @@ Never cite a prior entry here as substrate verification — that is a self-citat
 
 ---
 
+## 2026-09-17 — consolidated from one peer-dispatched lifecycle verification
+
+**Consultation provenance:** `fixes-9#aedea8` peer threads `a938dbb3` and `71b3f514`; durable finding on work item `9358e605`. No formal panel transcript exists for this dispatch.
+
+**Pin at consolidation:** `d981de12` (`v0.85.1`).
+
+**Re-verification gate:**
+
+| Candidate | Substrate verification | Outcome |
+|---|---|---|
+| Module-level pi tracker state can be shared by an extension through an independent module load. | `trackedDetachedChildPids` is a module-local `Set`; only `trackDetachedChildPid`, `untrackDetachedChildPid`, and `killTrackedDetachedChildren` read/write it (`packages/coding-agent/src/utils/shell.ts:192-211`). A live RPC probe from the dispatch observed child `4017107` survive pi SIGTERM exit 143 when apex-app imported the tracker through its own `node_modules` path. | accept — **high** |
+| Every bare `@earendil-works/pi-coding-agent` extension import resolves through the extension's own `node_modules`. | Rejected: compiled binaries virtualize the bare specifier (`packages/coding-agent/src/core/extensions/loader.ts:49-74`), and Node-mode aliases it to the runtime `packageIndex` (`:83-144`). The actual hazard is an import that bypasses this public binding, such as a relative deep `node_modules` path. | reject — **high** |
+
+**Internalized (1 skill refinement):**
+
+- `.pi/skills/pi-extensions/reference/runtime-module-state.md` — rule, resolution boundary, real-exit probe checklist, and the `9358e605` worked example. Dual provenance: peer threads `a938dbb3` / `71b3f514` plus substrate `packages/coding-agent/src/utils/shell.ts:192-211`, `packages/coding-agent/src/modes/rpc/rpc-mode.ts:366-379,728-745,804-820`; **high**.
+- `.pi/skills/pi-extensions/SKILL.md` — added the reference and apex-app pre-build consultation gate for process lifecycle, tool collisions, and settings (`1ddfbb42` / `9358e605`). Dual provenance: peer threads `a938dbb3` / `71b3f514` plus module-binding substrate `packages/coding-agent/src/core/extensions/loader.ts:49-74,83-144`; **high**.
+
+**Rejected (1):** The blanket bare-import claim above; loader source contradicts it. **high**
+
+---
+
 ## 2026-05-23 — consolidated from 4 transcripts
 
 **Pin at time of consolidation:** `e4163fe9` (matches `sources.md`).
