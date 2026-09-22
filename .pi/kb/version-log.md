@@ -6,6 +6,72 @@ Citations: `<sha>` for commit; `<file>:<line>` against the **new pin** (unless o
 
 ---
 
+## 2026-09-22 — checked; pin unchanged at `d981de12` (v0.85.1); four releases now pending upstream
+
+**Trigger:** routine `self-update`.
+
+**Previous pin:** `d981de12` (2026-09-06, tag `v0.85.1`). **New pin: unchanged.** `git rev-parse d981de12` and `v0.85.1^{commit}` are the same object `d981de1229ef899957bbe968bc8dcda02a21f477`, the installed runtime is `0.85.1` (`node -p "require('/home/debian/.local/lib/node_modules/@earendil-works/pi-coding-agent/package.json').version"`), and apex-app's devDependency is `0.85.1` (`apex-app/package.json:90`) — all three agree (high). Per `sources.md` § Update procedure the pin tracks the **release tag equal to the installed runtime**, so advancing it without upgrading the runtime would break every cite this expert makes; the pin stays.
+
+**Diff scope (pending, NOT pinned):** upstream shipped four releases since the last run — `v0.86.0` (164 commits past `v0.85.1`), `v0.86.1` (176), `v0.87.0` (194), `v0.87.1` (213). Full range `v0.85.1..v0.87.1`: 647 files under `packages/`, +78,794/−21,678 (`git diff --stat`, high).
+
+### Resolved from the last entry
+
+- **`faa9863cb` (#8718) shipped in 0.86.0** — the forward-looking signal logged 2026-09-13 as unreleased. Changelog 0.86.0: "Fixed direct RPC `steer` and `follow_up` commands bypassing extension `input` handlers" (high). **The prediction held:** no wire-shape change. `modes/rpc/rpc-mode.ts` is the *only* changed file under `modes/` across the whole range, +2/−2, passing `{ source: "rpc" }` into `session.steer()` / `session.followUp()` (`v0.87.1:packages/coding-agent/src/modes/rpc/rpc-mode.ts:419`, `:424`; high). The steering-message-provenance answer given on thread `570309a7` remains correct after upgrade.
+
+### Gate 6 (wire shape) — clean across the range
+
+- `packages/coding-agent/src/modes/rpc/rpc-types.ts` and `modes/json-event.ts` both have **empty diffs** `v0.85.1..v0.87.1` (high). An empty `rpc-types.ts` alone is not proof — that is exactly how 0.84.0 slipped through — but `json-event.ts`, the stripper that carried that invisible change, is also untouched, so the `RpcCommand` catalog and the emitted event payloads are unchanged. **No consumer flip is required by this range** (high).
+
+### Anthropic OAuth / billing — intact at `v0.87.1`, one impersonation bump
+
+`packages/ai/src/api/anthropic-messages.ts` took +273/−… across the range, and the mechanism survived again (verified by grep at the tag, **not** live-probed — a live gate needs the runtime upgraded first; high for the source claims, `low` that it bills correctly at runtime until gates 1-2 run):
+
+- `sk-ant-oat` detection at `v0.87.1:…/anthropic-messages.ts:907` (was `:898` at v0.85.1)
+- OAuth betas `claude-code-20250219`, `oauth-2025-04-20` at `:1017`
+- `user-agent: claude-cli/${claudeCodeVersion}` at `:952`; identity preamble `"You are Claude Code, Anthropic's official CLI for Claude."` at `:1082`
+- **`claudeCodeVersion` bumped `2.1.251` → `2.1.280`** (`v0.85.1:81` → `v0.87.1:87`), per 0.87.1 "Fixed inherited Anthropic OAuth requests reporting an outdated Claude Code version" (high)
+- Standing hazard unchanged: an explicit `anthropic-beta` header still **replaces** the OAuth identity betas verbatim (`getBetaFeatures` declared `v0.87.1:…:991`, verbatim-replacement branch `:1005-1015`; high)
+
+### What WILL go stale in territory when the runtime moves (not stale today)
+
+Nothing in `.pi/kb/` or `.pi/skills/` is wrong right now — every skill describes `v0.85.1`, which is what is running. These are the claims to re-derive during the upgrade, in priority order:
+
+- **`pi-prompt-assembly` — the largest break (0.87.0).** The prompt is no longer a flat concatenation: `buildSystemPromptSections()` returns **named, XML-wrapped, independently replaceable sections** — `<preamble> <tools> <rules> <docs> <addendum> <project_context> <skills> <cwd>` plus caller-supplied custom sections — and `buildSystemPromptState()` / section diffing back mid-conversation prompt changes (`v0.87.1:packages/coding-agent/src/core/system-prompt.ts:121-179`, `buildSystemPromptState` at `:186`; high). Our `APPEND_SYSTEM.md` lands inside `<addendum>` and cwd inside `<cwd>`. The skills gate is unchanged in substance — still `read` OR `bash` (`:165`, high). `system-prompt.ts` is +282 across the range.
+- **`pi-sessions` (0.87.0 breaking, changelog; high).** `ContextEditEntry` joins the exported `SessionEntry` union — exhaustive switches must handle `context_edit`. `SessionManager` becomes canonical for `AgentSession` provider context: assigning `session.agent.state.messages` no longer replaces future request history; restore via `SessionManager.inMemory(cwd, { id }, entries)`, `session.navigateTree()`, or append + `session.refreshContext()`. `core/session-manager.ts` is +522 — line cites unverified at this pin (medium).
+- **`pi-extensions` (0.86.0 + 0.87.0; high).** New exported types in `core/extensions/types.ts` (+234): `ContextWithSystemEvent`, `AgentBeforeSettleEvent`, `TurnEndEvent extends BoundaryState`, `BoundaryResult`, the `SessionBoundaryDraft` family, `CacheWarmingDecisionEvent`, widened `UserBashEventResult`. `shouldStopAfterTurn` **removed** → `finishTurn` returning `{ action: "end" }`. `ExtensionRunner.emit()` no longer accepts `turn_end` (use `emitBoundary`). `pi.on()` now returns an unsubscribe fn (#8967). `user_bash` fails closed (#9068).
+- **`pi-providers` (0.86.1 / 0.87.1; high).** Meta Muse provider via `/login meta` + `META_API_KEY`; xAI default → Grok 4.7; Claude Opus 5.5 / GPT-6 Sol / GPT-6 Luna added. **Still not answerable from the tree** — `packages/ai/src/providers/data/` remains gitignored; read the npm tarball.
+- **Docs paths moved** (affects any doc-anchored cite, not source cites): `docs/rpc.md` was split — new `docs/rpc-commands.md` (+854), `docs/rpc-extension-ui.md` (+200), `docs/message-types.md` (+261); `docs/extensions.md` 3,076 lines changed, predominantly deletions into the split (high).
+
+### Upgrade blast radius on our consumers — small (high)
+
+Every SDK importer we own uses only `RpcClient` or `ModelRuntime`; none touches `SessionEntry`, `ExtensionEvent`, `AgentSession.state.messages`, or a custom provider, so the 0.86.0/0.87.0 breaking changes are type surfaces we do not consume: `apex-app/scripts/reauth/run-account1-patient.ts:10` and `run-account1-attended.ts:36` (`ModelRuntime`); `efforts/pi-code/scripts/consult-pi-mono.ts:138`, `test-pi-mono-rpc.ts:10`, `parallel-probe/run.ts:36` (`RpcClient`). The remaining matches in `~/.claude/scripts/` (`pi-task.ts`, `voice/voice-agent.ts`, `lib/extractor-agent.ts`, `memory-consolidation-judge-runner.ts`) name the package as a string, not an import (`/usr/bin/grep` for `from "@earendil-works/pi-coding-agent"` → no hits in those four).
+
+**Recommendation (not executed — runtime upgrades are a human decision):** upgrading `0.85.1 → 0.87.1` is low-risk on the wire and worth doing for the `claudeCodeVersion` bump alone, but it is a 213-commit, 647-file range that relocates `system-prompt.ts` wholesale — so it needs the full procedure: `npm i -g`, gates 1-6, then `reanchor-cites.ts` + `verify-symbol-cites.ts` (pass 1 and pass 2) and a **mandatory gap-scan** per the large-diff rule in `sources.md`. Do not pin ahead of the runtime.
+
+### kb files touched
+- `.pi/kb/version-log.md` (this entry). No other kb or skill file needed a change: nothing in the pending range invalidates a claim about `v0.85.1`, which is what is installed.
+
+---
+
+## 2026-09-13 — checked; pin unchanged at `d981de12` (v0.85.1)
+
+**Trigger:** routine self-update requested after a subject-matter consult (thread `570309a7`, apex-app-expert).
+
+**Previous pin:** `d981de12` (2026-09-06, tag `v0.85.1`).
+**Result:** `git fetch upstream --tags` — no new release tag beyond `v0.85.1`. Installed runtime is also `0.85.1` (`node -p "require('/home/debian/.local/lib/node_modules/@earendil-works/pi-coding-agent/package.json').version"` → `0.85.1`). Pin already equals both the latest tag and the deployed runtime (`git rev-parse d981de12 v0.85.1` — identical SHA). **No material changes; pin stays at `d981de12` for log continuity.**
+
+### Forward-looking signal (not yet released — do not treat as current behavior)
+
+`upstream/main` has advanced 67 commits past `v0.85.1` (`git log --oneline v0.85.1..upstream/main | wc -l`, high). One is directly adjacent to territory this expert just answered a question about:
+
+- **`faa9863cb` — "fix(coding-agent): run input handlers for queued messages" (fixes upstream #8718), unreleased, high.** Currently (v0.85.1) `AgentSession.steer()`/`.followUp()` push straight to the queue without running the `input` extension hook — the commit routes both through a new shared `_runInputHandlers()` and adds an explicit `options?.source` param to `steer()`/`followUp()` (`agent-session.ts` diff in `faa9863cb`), and updates `modes/rpc/rpc-mode.ts`'s `case "steer"`/`case "follow_up"` to pass `{ source: "rpc" }`. **Does not change the wire shape or add a distinguishing field to the delivered `message_start` event** — still a plain `role:"user"` message; the new `source` is consumed internally by the input-handler pass, not surfaced to RPC clients. Watch for this landing in a future tag; re-answer the steering-message-provenance question then if it changes anything client-visible.
+- No other commits in the 67-commit range touch `core/extensions/types.ts`, `core/resource-loader.ts`, `core/system-prompt.ts`, `core/session-manager.ts`, or `packages/ai/src/api/anthropic-messages.ts`'s OAuth path (checked via targeted `git log --oneline v0.85.1..upstream/main -- <paths>`, high) — no billing or trust-gating drift pending.
+
+### kb files touched
+- `.pi/kb/version-log.md` (this entry) — no other kb file needed a correction; nothing in the 67-commit range invalidates a standing claim in the territorial skills.
+
+---
+
 ## 2026-09-06 — pulled to `d981de12` (v0.85.1)
 
 > **Trigger was a filed defect, not a routine eval.** Workitem `3d7d1224` reported the checkout as behind the deployed pi and "silently yielding a wrong RPC surface." Confirmed exactly before acting: `clear_queue` returns **0 hits** across the whole checkout at `v0.84.1` and **7 files** at `v0.85.1` (`git grep -c clear_queue`). The pin had been stale since 0.84.2 shipped. `main` fast-forwarded to `v0.85.1`; `expert/main` rebased clean (29 commits, `.pi/`-only — verified: 46 `.pi/` paths + 1 `.claude/` path, **zero** non-expert files).
