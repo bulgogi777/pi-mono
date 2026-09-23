@@ -48,8 +48,38 @@ Every SDK importer we own uses only `RpcClient` or `ModelRuntime`; none touches 
 
 **Recommendation (not executed — runtime upgrades are a human decision):** upgrading `0.85.1 → 0.87.1` is low-risk on the wire and worth doing for the `claudeCodeVersion` bump alone, but it is a 213-commit, 647-file range that relocates `system-prompt.ts` wholesale — so it needs the full procedure: `npm i -g`, gates 1-6, then `reanchor-cites.ts` + `verify-symbol-cites.ts` (pass 1 and pass 2) and a **mandatory gap-scan** per the large-diff rule in `sources.md`. Do not pin ahead of the runtime.
 
+### Addendum, same day 19:5x CDT — gate 7 (agent-dir farm) applied to this range
+
+Added after the entry above, during a consult with apex-app's `auth-delegator-5` (their workitem `c850ecbb`). Not a correction: new measurements, appended.
+
+**The measurement the next expert should not re-derive.** pi's `FileModelsStore.write()` is a whole-document read-modify-write inside a `proper-lockfile` lock (`v0.87.1:packages/coding-agent/src/core/models-store.ts:127-136`), and both lock call sites pass **`realpath: false`** (`core/auth-storage.ts:76`, `:128`). Measured 2026-09-22 with `proper-lockfile` from the installed 0.87.1 tree against a symlink+target pair in `/tmp` (high, **measured not inferred**):
+
+```
+realpath:false -> second lock ACQUIRED (no mutual exclusion)
+realpath:true  -> second lock BLOCKED: ELOCKED
+```
+
+So two agent dirs reaching one file by two paths do **not** exclude each other; the failure shape is a lost update, not corruption. **Not an upgrade regression** — `core/auth-storage.ts` and `core/models-store.ts` both have empty diffs `v0.85.1..v0.87.1` (high). It became reachable when apex-app shipped per-session account routing (`a6e7669f`, 2026-09-22) and was closed the same day by de-symlinking the second dir's `models-store.json`. Durable page: `.pi/kb/agent-dir-farm.md`; standing check: `sources.md` § Post-upgrade verification gate 7.
+
+**Gate 7 applied to `v0.85.1..v0.87.1`.** Candidate set derived from the diff, not memory — `git diff v0.85.1..v0.87.1 -- packages/coding-agent/src | grep -n "getAgentDir()"` returns four hits (high): `crashLogPath()` (new), `experimental/micro-sessions/` (new, experimental-gated), a `TuiAltScreen` path and an existing `logDirectory`.
+
+| New/changed artifact | Locked? | Symlinked in 2nd dir? | Must be real file? |
+|---|---|---|---|
+| `crashes.json` (0.86, `core/crash-log.ts:20-21`) | **no lock at all** — not routed through `AuthStorageBackend` | no (absent from both dirs) | **leave per-dir** — sharing an unlocked wholesale rewrite between two crashing processes is strictly worse |
+| `models-store.json` (writer unchanged) | yes, `realpath:false` | **was** yes — de-symlinked 2026-09-22 | **yes**, done |
+| `experimental/micro-sessions/` | n/a | no | no — experimental, not on our path |
+| `settings.json` (0.86 adds cache-warming keys) | **unaudited** | yes | **unproven** — a settings write from two dirs is not cleared; audit before relying on it |
+
+### Typecheck probe result (apex-app @ master `f584e1f`, types only)
+
+apex-app typechecked against a full `0.87.1` install in `/tmp` across all three of its configs (`tsconfig.json` + `servercheck` + `testcheck`; a bare `tsc --noEmit` skips `server/` and `pi-extensions/` entirely): **0 errors attributable to 0.87.1** (baseline 0/0; the root config reports the same 2 `TS2688` in both arms, an artifact of the probe's absolute `typeRoots`). Positive control: 1,168 files from the 0.87.1 install in the servercheck program. `node_modules` untouched. The half-swapped-tree hazard this exposed is now gate 6's last bullet.
+
 ### kb files touched
-- `.pi/kb/version-log.md` (this entry). No other kb or skill file needed a change: nothing in the pending range invalidates a claim about `v0.85.1`, which is what is installed.
+- `.pi/kb/version-log.md` (this entry + the addendum above).
+- `.pi/kb/agent-dir-farm.md` (**new**) — farm layout, the `realpath:false` mechanism and measurement, remediation order.
+- `.pi/kb/sources.md` — new **gate 7** (agent-dir farm) and a new bullet under gate 6 (typecheck against a whole install, never a bare tarball extract).
+
+Nothing in the pending range invalidates a claim about `v0.85.1`, which is what is installed; no territorial skill needed a change.
 
 ---
 
