@@ -1,77 +1,66 @@
 # System Prompt Assembly Order
 
-Section-by-section breakdown of what `buildSystemPrompt` produces, branch by branch. All cites against `packages/coding-agent/src/core/system-prompt.ts` at the current pin (`v0.85.1`, `d981de12`). Note: in 0.80.x the `Current date:` line was **removed** from the system prompt (commit `f4e9ca74`, fixes #6621), shifting all line numbers in this file down by ~10.
+What pi's system prompt is made of, in what order, and where it goes. All cites are against `packages/coding-agent/src/core/system-prompt.ts` at the current pin (`v0.87.1`, `f07218c4`) unless another file is named.
 
-## Entry point
+> **Rewritten 2026-09-22 for 0.87.0.** Before 0.87.0, `buildSystemPrompt` concatenated one string through one of two branches: `customPrompt` (early return) or default. **Both branches are gone.** The prompt is now a set of **named sections**. Pi stores it **in the session transcript** as a system message, and when it changes, pi appends a section patch instead of rewriting the head. For the pre-0.87 layout, read this file at a pre-0.87 commit (e.g. `git show afdbe1759:.pi/skills/pi-prompt-assembly/reference/assembly-order.md`). None of its line numbers or branch descriptions survive.
 
-`buildSystemPrompt(options: BuildSystemPromptOptions)` at `core/system-prompt.ts:28-168`.
+## Entry points
 
-Inputs:
-- `customPrompt?: string` — if set, the function takes the **customPrompt branch** (`:48-73`). Otherwise the **default-prompt branch** (`:75-167`) builds pi's stock prompt from scratch.
-- `selectedTools?: string[]` — defaults internally to `["read", "bash", "edit", "write"]` at `:45`. Tool list determines (a) the `Available tools:` rendering, (b) which guidelines fire, and (c) whether the skills section is included.
-- `toolSnippets?: Record<string, string>` — one-line descriptions keyed by tool name. A tool is only listed in `Available tools:` when a snippet is supplied (`:82-84`).
-- `promptGuidelines?: string[]` — extra bullets appended to the auto-generated guidelines.
-- `appendSystemPrompt?: string` — pre-resolved text from `--append-system-prompt` and/or `APPEND_SYSTEM.md`.
-- `cwd: string` — working directory; appears as the trailing `Current working directory:` line.
-- `contextFiles?: Array<{ path; content }>` — pre-loaded by `loadProjectContextFiles` (lives in **pi-architecture** territory; here we just consume them).
-- `skills?: Skill[]` — pre-loaded skill metadata. Bodies are **not** in scope; only `name`, `description`, `filePath` get rendered (see `formatSkillsForPrompt` below).
+| Function | Lines | Returns |
+|---|---|---|
+| `normalizeBuildSystemPromptOptions(input)` | `core/system-prompt.ts:54-70` | A defensive copy with defaults filled. `selectedTools` defaults to `["read", "bash", "edit", "write"]` (`:58`). |
+| `buildSystemPromptSections(input)` | `:121-179` | `SystemPromptSections`, a `Record<string, string>` in insertion order. This is the prompt. |
+| `buildSystemPromptState(input)` | `:186-192` | `{ content: forced }` with **no sections** if `forceSystemPrompt` is set; otherwise `{ content: "", sections }`. |
+| `buildSystemPrompt(input)` | `:195-197` | The rendered string: `getSystemMessageText` over the state (`packages/ai/src/utils/text.ts:15-21`). It matches what the transcript's system message replays. |
+| `diffSystemPromptSections(previous, current)` | `:204-216` | A `sections` patch (changed text, or `null` for a removed section), or `undefined` when nothing changed. |
 
-Common preamble (both branches): `appendSection` at `:41`, `promptCwd` (backslashes normalized to forward) at `:39`. (There is no longer a `Current date:` line — it was removed in 0.80.x.)
+`BuildSystemPromptOptions` (`:9-32`) adds two inputs since 0.86/0.87. `forceSystemPrompt` (`:13`) is an opaque full replacement, set when a `before_agent_start` handler returns `systemPrompt`. `sections` (`:25`) holds caller-supplied named sections.
 
-## Branch 1 — `customPrompt` (lines 46-72)
+## Section order
 
-Order in the assembled string:
+`buildSystemPromptSections` fills an ordered record (`:142-173`), then wraps every section except `preamble` in XML tags named after the section (`:175-178`: `` `<${name}>\n${content}\n</${name}>` ``). `getSystemMessageText` joins the sections with blank lines, in insertion order.
 
-1. **Custom prompt body** — verbatim `customPrompt` (`:49`).
-2. **APPEND_SYSTEM section** — `\n\n` + `appendSystemPrompt` (`:51-53`). Skipped when empty.
-3. **`<project_context>` block** — emitted only if `contextFiles.length > 0` (`:56-63`). The block opens with `\n\n<project_context>\n\nProject-specific instructions and guidelines:\n\n`. Each file becomes `<project_instructions path="<absolute-path>">\n<content>\n</project_instructions>\n\n`. The block closes with `</project_context>\n`. **Pre-0.75.0** this section used a `# Project Context` Markdown heading with `## <abs-path>` per file; PRs #4541 (`7577d3b8`) and #4709 (`aad8cf66`) switched both branches to XML tags so models do not ingest prompt content past the boundary.
-4. **Skills section** — `formatSkillsForPrompt(skills)` appended only when both conditions hold (`:64-65`):
-   - `customPromptHasRead = !selectedTools || selectedTools.includes("read")` (`:64`). If `selectedTools` is undefined the gate is open; explicit tool lists must include `"read"`.
-   - `skills.length > 0`.
-5. **Trailing metadata** (`:69`):
-   - `\nCurrent working directory: <cwd>` (backslashes normalized to forward at `:39`). The `Current date:` line that used to precede this was removed in 0.80.x.
+| # | Section | Present when | Content | Lines |
+|---|---|---|---|---|
+| 1 | `preamble` | always | `customPrompt` verbatim if set (`:143-144`), otherwise pi's stock line: *"You are an expert coding assistant operating inside pi, a coding agent harness…"* (`:146-147`). **Not XML-wrapped.** | `:143-147` |
+| 2 | `tools` | no `customPrompt` | `- name: snippet` for each selected tool with a `toolSnippets` entry, else `(none)`, then a line about custom tools | `:148-151` |
+| 3 | `rules` | no `customPrompt` | `buildRules(...)` (`:81-118`), deduped through the `seen` set (`:87-92`). File-exploration guidance goes first: with bash and/or PowerShell but no grep/find/ls, "Use bash for file operations like ls, rg, find" (`:100-109`). Then per-tool `toolGuidelines` (new in 0.86/0.87), caller `promptGuidelines`, and the fixed tail "Be concise…" and "Show file paths clearly…" | `:152` |
+| 4 | `docs` | no `customPrompt` | Pi documentation pointers: README, `docs/`, `examples/` paths from `getReadmePath` / `getDocsPath` / `getExamplesPath` | `:153-160` |
+| 5 | `addendum` | `appendSystemPrompt` non-empty | APPEND_SYSTEM.md and/or `--append-system-prompt` | `:163` |
+| 6 | `project_context` | `contextFiles.length > 0` | `renderProjectContext` (`:72-79`): "Project-specific instructions and guidelines:" then one `<project_instructions path="…">` block per AGENTS.md / CLAUDE.md | `:164` |
+| 7 | `skills` | a skill-file tool exists **and** `skills.length > 0` | `formatSkillsForPrompt(skills, skillFileReadTool)`, see below | `:165-169` |
+| 8 | `cwd` | always | the working directory, backslashes normalized to `/` | `:170` |
+| 9+ | custom sections | caller passes `sections` | any name matching `/^[a-z][a-z0-9_-]*$/` (`:52`) except `preamble`. An invalid name **throws** (`:136-140`). Empty content is skipped. | `:171-173` |
 
-The customPrompt branch contains **no** "You are an expert coding assistant…" preamble, **no** auto-generated `Available tools:` table, **no** auto-generated `Guidelines:` block, and **no** `Pi documentation` block. Everything pi normally inserts above APPEND_SYSTEM is the caller's responsibility.
+**What `--system-prompt` changes, and what it doesn't.** It swaps the preamble (1) and drops the default `tools`, `rules` and `docs` sections (2–4). `addendum`, `project_context`, `skills` and `cwd` (5–8) are appended either way. Pre-0.87 it behaved the same, but through a separate branch. Billing still turns on the preamble: pi's stock line self-identifies as "a coding agent harness", which is what makes Anthropic classify the traffic as a third-party app.
 
-## Branch 2 — default prompt (lines 74-161)
+**What a consumer sees:** since 0.87 the rendered prompt contains literal `<addendum>`, `<project_context>`, `<skills>` and `<cwd>` wrappers. Consumers used to receive bare concatenated text. Any test or tool that asserts on system-prompt text must expect the wrappers.
 
-Order in the assembled string (built into a single `prompt` variable starting at `:127`):
+## Skill-file-read-tool gate
 
-1. **Hard-coded preamble** (`:127-144`): `"You are an expert coding assistant operating inside pi…"`.
-2. **`Available tools:`** list (rendered via `${toolsList}` at `:130`). Built from `selectedTools` filtered to those with a `toolSnippets[name]` entry; falls back to `(none)` when empty (`:82-84`).
-3. **Guidelines** (built `:87-125`, rendered via `${guidelines}` at `:134-135`). Auto-derived bullets:
-   - File-exploration guideline: bash-only without grep/find/ls suggests `"Use bash for file operations like ls, rg, find"` (`:104-106`).
-   - Caller-supplied `promptGuidelines` (`:114-119`), deduped via `guidelinesSet` (`:88-95`).
-   - Always-on tail: `"Be concise in your responses"` and `"Show file paths clearly when working with files"` (`:122-123`).
-4. **Pi documentation block** (`:137-144`). Hard-coded list of `docs/*.md` paths (extensions, themes, skills, prompt-templates, tui, keybindings, sdk, custom-provider, models, packages) plus the absolute paths from `getReadmePath() / getDocsPath() / getExamplesPath()` (`:76-78`).
-5. **APPEND_SYSTEM section** (`:146-148`). Same `\n\n` + `appendSystemPrompt` pattern as the customPrompt branch.
-6. **`<project_context>` block** (`:151-158`). Identical XML wrapping to customPrompt branch step 3 (same pre-0.75.0 migration note applies).
-7. **Skills section** (`:161-162`). Gate is `skillFileReadTool`, computed once at `:46` for both branches: `(["read", "bash"] as const).find((tool) => tools.includes(tool))`, evaluated against `tools = selectedTools || ["read", "bash", "edit", "write"]` at `:45`. If the caller passes `selectedTools: []` or any list lacking **both** `"read"` and `"bash"`, no skills. **Changed in 0.85.0** (upstream #8552): the gate was previously `hasRead = tools.includes("read")` alone, so a `bash`-only tool set lost every skill.
-8. **Trailing metadata** (`:165`). Same as customPrompt branch (`Current working directory:` only; no date line).
+`skillFileReadTool = (["read", "bash"] as const).find((tool) => selectedTools.includes(tool))` (`:165`). Skills render only when it resolves (`:166`). The gate is the same as 0.85.0 (upstream #8552), when it widened from `read` only to `read` OR `bash`, but it now lives in one place because there is only one builder. `selectedTools: []`, or any list containing neither tool, drops every skill silently.
 
-## The skills section is only metadata
+## The skills section holds only metadata
 
-`formatSkillsForPrompt(skills)` at `packages/coding-agent/src/core/skills.ts:335-361` emits, per skill:
+`formatSkillsForPrompt(skills, fileReadTool)` at `packages/coding-agent/src/core/skills.ts:355-383` renders `<available_skills>` with `name` / `description` / `location` per skill. Skills with `disableModelInvocation: true` are filtered out at `:356`. The instruction line names the resolved tool (`:365-366`). **A `SKILL.md` body never enters the system prompt**; the model loads it with a tool call when a description matches.
 
-```xml
-<skill>
-  <name>...</name>
-  <description>...</description>
-  <location>/abs/path/to/SKILL.md</location>
-</skill>
-```
+## The prompt lives in the transcript (0.86/0.87)
 
-Wrapped in `<available_skills>…</available_skills>` plus a three-line preamble instructing the model to `read` the location when a description matches (`core/skills.ts:363-367`). Skills with `disableModelInvocation: true` are filtered out at `core/skills.ts:356` (so they remain `/skill:name`-invocable but never appear in the prompt).
+The step that most changes how cost and caching reason about the prompt:
 
-**The body of `SKILL.md` is never injected into the system prompt.** It is loaded later, on demand, when the model issues a `read` (or `bash`) tool call against `<location>`. That is why the skill-file-read-tool gate at `core/system-prompt.ts:66` (customPrompt) and `:161` (default) disables skills entirely — with neither `read` nor `bash`, the model cannot follow up on a skill listing, so listing them would be dead weight. Since 0.85.0 the resolved tool is threaded into `formatSkillsForPrompt(skills, skillFileReadTool)` so the instruction line names the tool the agent actually has.
+1. At the start of each run, `AgentSession._preparePromptAndToolLoadout` (`core/agent-session.ts:1407-1421`) builds the current sections and diffs them against the sections the model already has, replayed from the transcript by `getCurrentSystemMessage` (`:1416-1419`).
+2. If anything changed, it returns a **system message whose `sections` is only the patch**, and that message is persisted into the session (`:1420`). On a fresh session, the first such message carries every section.
+3. At request time the provider receives the transcript, system messages included, and decides what to send. See `reference/cache-breakpoints.md`. Models with `supportsMidConvoSystemMessages` get the patch in place, rendered by `renderSystemMessageUpdate` (`packages/ai/src/utils/text.ts:28-40`) as "Updated system prompt section "name": …". Other models get the transcript collapsed so the current full prompt leads (`packages/ai/src/utils/transcript.ts:108-120`).
 
-## What this means for cache layout
+**Consequence:** editing AGENTS.md, a skill description, or APPEND_SYSTEM.md mid-session no longer silently replaces the prompt for the rest of the session. It appends a durable, replayable patch that survives resume and branch navigation (0.86.0, #9548).
 
-The system prompt becomes a single string passed downstream as `context.systemPrompt`. The Anthropic provider (`packages/ai/src/api/anthropic-messages.ts`) wraps it in a single text block with a single `cache_control` breakpoint at `api/anthropic-messages.ts:1077` (non-OAuth) or `:1067` (OAuth user-system block, after the constant identity preamble at `:1059`). Order matters: anything inserted earlier is part of the cached prefix; anything inserted later still falls inside the same cache block because the entire system prompt is one block. See `reference/cache-breakpoints.md` for the cascade rules.
+### The forced-prompt exception
+
+A `before_agent_start` handler that **returns** `systemPrompt` sets `forceSystemPrompt` (`core/extensions/runner.ts`, `emitBeforeAgentStart` `:1312-1364`). A second handler's `event.systemPrompt` is a getter over the same options (`runner.ts:1318`), so it sees the first handler's text and chaining is preserved. A forced prompt is **opaque**: `buildSystemPromptState` returns content with no sections. The transcript still records the structured sections, but `_installAgentForcedPromptProjection` (`core/agent-session.ts:1433-1448`, JSDoc from `:1422`) collapses every system message into **one head holding the forced text** at request time. A forced prompt therefore opts the session out of mid-conversation patching, whatever the model supports. The 0.87-native alternative is to **mutate** `event.systemPromptOptions` (`NormalizedBuildSystemPromptOptions`, mutable sections), which keeps the structure. `event.systemPrompt` is `readonly` since 0.87.0.
 
 ## Cross-references
 
-- The pre-loading of `contextFiles` (AGENTS.md / CLAUDE.md ancestor walk) and `skills` lives in **pi-architecture** (`reference/discovery-paths.md`). This skill only documents how those pre-loaded values get rendered into the final string.
-- **Trust gating on project SYSTEM.md / APPEND_SYSTEM.md / AGENTS.md.** Project `<cwd>/.pi/SYSTEM.md` and `APPEND_SYSTEM.md` are loaded only when `isProjectTrusted()` is true (`resource-loader.ts:1024-1025, :980-981`). The global `~/.pi/agent/SYSTEM.md` and `APPEND_SYSTEM.md` floor is ungated (`:1025-1026, :985-986`) and survives headless RPC in untrusted cwds. `AGENTS.md` / `CLAUDE.md` context files are loaded regardless of trust (`docs/security.md`). Full trust resolution chain lives in **pi-architecture**.
-- Extension hooks that can replace the system prompt (`before_agent_start` returning `systemPrompt`) are **pi-extensions** territory.
-- `--system-prompt` and `--append-system-prompt` resolve via `resolvePromptInput` at `packages/coding-agent/src/core/resource-loader.ts:54-69` — file-if-exists, else literal text.
+- Loading `contextFiles` (the AGENTS.md / CLAUDE.md ancestor walk) and `skills` belongs to **pi-architecture** (`reference/discovery-paths.md`).
+- **Trust gating.** Project `<cwd>/.pi/SYSTEM.md` and `APPEND_SYSTEM.md` load only when `isProjectTrusted()` is true (`core/resource-loader.ts:1028-1029`, `:1042-1043`). The global `~/.pi/agent/SYSTEM.md` / `APPEND_SYSTEM.md` floor is ungated (`:1033`, `:1047`). The full resolution chain belongs to **pi-architecture**.
+- `--system-prompt` and `--append-system-prompt` resolve through `resolvePromptInput` (`core/resource-loader.ts:54`): the file if it exists, otherwise literal text.
+- The `before_agent_start` result contract belongs to **pi-extensions** (`reference/hook-events.md`).

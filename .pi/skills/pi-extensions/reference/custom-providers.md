@@ -2,7 +2,7 @@
 
 How extensions add (or override) LLM providers. This file is about the **extension-side registration contract**. For auth resolution semantics, env-var mapping, OAuth-vs-API-key billing, the `sk-ant-oat` Anthropic detection, and the third-party-app extra-usage pool, see **pi-providers** (`reference/auth-resolution.md` and `reference/built-in-providers.md`).
 
-All cites against `packages/coding-agent/src/core/extensions/types.ts` at the current pin (`v0.85.1`, `d981de12`).
+All cites against `packages/coding-agent/src/core/extensions/types.ts` at the current pin (`v0.87.1`, `f07218c4`).
 
 ## Signature
 
@@ -11,11 +11,11 @@ pi.registerProvider(name: string, config: ProviderConfig): void;
 pi.unregisterProvider(name: string): void;
 ```
 
-`registerProvider` at `extensions/types.ts:1486-1487` (two overloads; three full inline examples in the JSDoc at `:1434-1485`). `unregisterProvider` at `extensions/types.ts:1502`.
+`registerProvider` at `extensions/types.ts:1604-1605` (two overloads; three full inline examples in the JSDoc at `:1552-1603`). `unregisterProvider` at `extensions/types.ts:1620`.
 
 ## ProviderConfig — three operating modes
 
-The shape is `ProviderConfig` at `extensions/types.ts:1513-1557`. Which fields you set determines the behavior:
+The shape is `ProviderConfig` at `extensions/types.ts:1631-1681`. Which fields you set determines the behavior:
 
 | Mode | Fields set | What happens |
 |---|---|---|
@@ -24,7 +24,7 @@ The shape is `ProviderConfig` at `extensions/types.ts:1513-1557`. Which fields y
 | **OAuth registration** | `oauth` block | Plugs into the `/login` UI. Combine with `models` for a full custom provider, or `baseUrl` to add OAuth to a built-in. |
 | **Custom transport** | `streamSimple` | Bypasses pi-ai's built-in providers entirely; the extension ships its own `(model, context, options) => AssistantMessageEventStream` implementation. |
 
-Field reference (`extensions/types.ts:1421-1463`):
+Field reference (`extensions/types.ts:1539-1581`):
 
 | Field | Type | Required when | Notes |
 |---|---|---|---|
@@ -38,11 +38,11 @@ Field reference (`extensions/types.ts:1421-1463`):
 | `models` | `ProviderModelConfig[]?` | Optional | If set, replaces all models for the provider. |
 | `oauth` | `{ name, login, refreshToken, getApiKey, modifyModels? }` | Optional | Plugs into `/login`. See OAuth subsection below. |
 
-The model-entry type (formerly `ProviderModelConfig`; that named type no longer exists — it is now the inline element type of `ProviderConfigInput["models"]` at `packages/coding-agent/src/core/provider-composer.ts:55-70`, per `9993c969`/v0.80.8) carries `id`, `name`, optional `api` override, `baseUrl` (per-model override; **honored as of v0.72.0** — now `provider-composer.ts:142` for `models.json` and `:234` for `registerProvider`), `reasoning`, `thinkingLevelMap` (added v0.72.0; replaces removed `compat.reasoningEffortMap`), `input` modalities, `cost`, `contextWindow`, `maxTokens`, etc. — same shape as built-in model definitions. For the migration from `reasoningEffortMap`, see **pi-providers** `reference/custom-providers.md`.
+The model-entry type (formerly `ProviderModelConfig`; that named type no longer exists — it is now the inline element type of `ProviderConfigInput["models"]` at `packages/coding-agent/src/core/provider-composer.ts:59-76`, per `9993c969`/v0.80.8) carries `id`, `name`, optional `api` override, `baseUrl` (per-model override; **honored as of v0.72.0** — now `provider-composer.ts:170` for `models.json` and `:264` for `registerProvider`), `reasoning`, `thinkingLevelMap` (added v0.72.0; replaces removed `compat.reasoningEffortMap`), `input` modalities, `cost`, `contextWindow`, `maxTokens`, etc. — same shape as built-in model definitions. For the migration from `reasoningEffortMap`, see **pi-providers** `reference/custom-providers.md`.
 
 ## OAuth provider contract
 
-When `config.oauth` is set, pi adds the provider to the `/login` flow. Contract (`extensions/types.ts:1447-1460`):
+When `config.oauth` is set, pi adds the provider to the `/login` flow. Contract (`extensions/types.ts:1565-1578`):
 
 ```ts
 oauth?: {
@@ -60,11 +60,11 @@ The `id` field on `oauth` is set automatically from the registration `name`.
 
 ## Timing — when registration takes effect
 
-JSDoc at `extensions/types.ts:1344-1348`:
+JSDoc at `extensions/types.ts:1462-1466`:
 
 > During initial extension load this call is **queued** and applied once the runner has bound its context. After that it takes effect immediately, so it is safe to call from command handlers or event callbacks without requiring a `/reload`.
 
-Concretely: a `registerProvider` call from the factory function runs before the runner exists, so it's parked in `pendingProviderRegistrations` (`extensions/types.ts:1562`) and replayed during runner binding. A `registerProvider` call from inside a hook handler or command handler executes immediately against the live registry.
+Concretely: a `registerProvider` call from the factory function runs before the runner exists, so it's parked in `pendingProviderRegistrations` (`extensions/types.ts:1686`) and replayed during runner binding. A `registerProvider` call from inside a hook handler or command handler executes immediately against the live registry.
 
 ## Worked examples
 
@@ -100,7 +100,7 @@ Once registered, pi resolves the API key for the custom provider via the same fi
 1. Runtime override (`--api-key`, `pi.setApiKey`)
 2. `auth.json` `api_key` entry
 3. `auth.json` `oauth` entry (with auto-refresh)
-4. Environment variable (resolved via `env-api-keys.ts:110-122` — but custom providers aren't in that map; they fall through to step 5)
+4. Environment variable (resolved via `env-api-keys.ts:111-123` — but custom providers aren't in that map; they fall through to step 5)
 5. **Custom resolver** — `models.json` provider keys, plus the `apiKey` field from `ProviderConfig`
 
 The fifth step is how `apiKey: "MY_VAR"` in `ProviderConfig` actually wires up: `resolveConfigValue` (in `core/resolve-config-value.ts`) interprets the string as either `!shell-command`, an env-var name, or a literal — same rules as `auth.json`.

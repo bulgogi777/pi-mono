@@ -1,10 +1,10 @@
 # RPC Protocol
 
-The full wire-protocol reference for `pi --mode rpc`. All cites against pi-mono at the current pin (`v0.85.1`, `d981de12`). The wire schema is defined in **one** file: `packages/coding-agent/src/modes/rpc/rpc-types.ts` (297 lines at `v0.85.1`, the entire union of every command, response, event, and extension-UI message) — **with one exception: the `message_update` payload is shaped by `modes/json-event.ts`, not by `rpc-types.ts`.** The dispatcher is `packages/coding-agent/src/modes/rpc/rpc-mode.ts` (821 lines). The framer is `jsonl.ts` (58 lines). Canonical doc: `packages/coding-agent/docs/rpc.md`.
+The full wire-protocol reference for `pi --mode rpc`. All cites against pi-mono at the current pin (`v0.87.1`, `f07218c4`). The wire schema is defined in **one** file: `packages/coding-agent/src/modes/rpc/rpc-types.ts` (297 lines at `v0.85.1`, the entire union of every command, response, event, and extension-UI message) — **with one exception: the `message_update` payload is shaped by `modes/json-event.ts`, not by `rpc-types.ts`.** The dispatcher is `packages/coding-agent/src/modes/rpc/rpc-mode.ts` (821 lines). The framer is `jsonl.ts` (58 lines). Canonical doc: `packages/coding-agent/docs/rpc.md`.
 
 ## Framing
 
-JSONL with **LF-only** record delimiters. Documented at `packages/coding-agent/docs/rpc.md:29-40`; implemented at `packages/coding-agent/src/modes/rpc/jsonl.ts:1-58`.
+JSONL with **LF-only** record delimiters. Documented at `packages/coding-agent/docs/rpc.md:50-54` (and `docs/json.md:13-17`); implemented at `packages/coding-agent/src/modes/rpc/jsonl.ts:1-58`.
 
 Rules:
 
@@ -47,7 +47,7 @@ The discriminated union is `RpcCommand` at `rpc-types.ts:19-72`. Per-command han
 | `steer` | `message`, `images?` | `:22` | `rpc-mode.ts:404-408` | — | Queue while streaming, delivered after the current assistant turn finishes its tool calls, before the next LLM call. Skill / template expansion runs; extension commands rejected. |
 | `follow_up` | `message`, `images?` | `:23` | `rpc-mode.ts:409-413` | — | Queue until the agent is fully idle, then deliver. |
 | `abort` | — | `:24` | `rpc-mode.ts:428-431` | — | Cancels the running agent and **responds only once the session is idle** — `await session.abort()` (`rpc-mode.ts:429`). **This is NOT new**: the handler is byte-identical at `v0.84.1` and `v0.85.1`, and has awaited since the RPC rewrite (`3559a43ba`). What 0.85.0 changed is *what idle means* — see the note below. Note `abort` **continues** any queued messages that remain in the session; it clears no queue. Send `clear_queue` first if that is not what you want. |
-| `clear_queue` | — | `:26` | `rpc-mode.ts:433-435` | `{ steering: string[], followUp: string[] }` | **New in 0.84.4.** Removes queued steering + follow-up messages and **returns their text** so the client can restore it in an editor. Delegates to `AgentSession.clearQueue()` (`core/agent-session.ts:1587`). Creates no turn. Canonical Esc-key recipe (`docs/rpc.md`): send `clear_queue` **then** `abort`, and put the returned strings back in the editor. |
+| `clear_queue` | — | `:26` | `rpc-mode.ts:433-435` | `{ steering: string[], followUp: string[] }` | **New in 0.84.4.** Removes queued steering + follow-up messages and **returns their text** so the client can restore it in an editor. Delegates to `AgentSession.clearQueue()` (`core/agent-session.ts:2043`). Creates no turn. Canonical Esc-key recipe (`docs/rpc.md`): send `clear_queue` **then** `abort`, and put the returned strings back in the editor. |
 | `new_session` | `parentSession?` | `:27` | `rpc-mode.ts:437-449` | `{ cancelled: boolean }` | Cancellable via `session_before_switch` hook. `cancelled: true` means an extension vetoed. |
 
 ### Streaming behavior
@@ -112,17 +112,17 @@ The discriminated union is `RpcCommand` at `rpc-types.ts:19-72`. Per-command han
 
 ### Generic error response
 
-Any command can fail with `{ id, type: "response", command, success: false, error: string }` (`rpc-types.ts:111+`). Parse failures (malformed JSON line) come back with `command: "parse"` (`rpc.md:1231-1239`).
+Any command can fail with `{ id, type: "response", command, success: false, error: string }` (`rpc-types.ts:111+`). Parse failures (malformed JSON line) come back with `command: "parse"` (`coding-agent/docs/rpc.md:80-83`; since the 0.86/0.87 docs split `rpc.md` is a 192-line overview and the per-command reference moved to `rpc-commands.md`).
 
 ## Event stream
 
-Pi emits the `AgentSessionEvent` union (`packages/coding-agent/src/core/agent-session.ts:144-185`, also documented at `packages/coding-agent/docs/json.md:11-25`). It composes the base `AgentEvent` from `packages/agent/src/types.ts:429` plus pi-coding-agent-specific events. Events have no `id` field.
+Pi emits the `AgentSessionEvent` union (`packages/coding-agent/src/core/agent-session.ts:164-206`, also documented in `packages/coding-agent/docs/json.md` — since the 0.86/0.87 docs split, the wire event sequence is `json.md:31-48` and the agent/turn events section starts at `:50`). It composes the base `AgentEvent` from `packages/agent/src/types.ts:483` plus pi-coding-agent-specific events. Events have no `id` field.
 
 | Event `type` | Payload | Emitted when |
 |---|---|---|
 | `agent_start` | — | Agent begins processing a prompt. |
-| `agent_end` | `messages: AgentMessage[]`, `willRetry: boolean` | The agent loop finished a run. `willRetry: true` means an auto-compaction/retry will re-enter the loop, so this is **not** terminal. Payload gained `willRetry` in 0.80.x (`agent-session.ts:147-150`; predicate `_willRetryAfterAgentEnd` at `:695`, terminal `stopReason !== "stop"` at `:2145`). |
-| `agent_settled` | — | **New in 0.80.x** (`agent-session.ts:151`). Emitted once, *after* the final `agent_end`, when the loop has fully drained (steering + follow-up queues empty, no retry pending). Emitted at `agent-session.ts:632-633` via `_emitAgentSettled()` (`:1103`). This — not `agent_end` — is what `RpcClient.waitForIdle()` now resolves on. |
+| `agent_end` | `messages: AgentMessage[]`, `willRetry: boolean` | The agent loop finished a run. `willRetry: true` means an auto-compaction/retry will re-enter the loop, so this is **not** terminal. Payload gained `willRetry` in 0.80.x (`agent-session.ts:165-170`; predicate `_willRetryAfterAgentEnd` at `:976`, applied when forwarding `agent_end` at `:919`, terminal `stopReason !== "stop"` at `:2663`). |
+| `agent_settled` | — | **New in 0.80.x** (`agent-session.ts:171`). Emitted once, *after* the final `agent_end`, when the loop has fully drained (steering + follow-up queues empty, no retry pending). Emitted at `agent-session.ts:875-876` via `_emitAgentSettled()` (`:1466`). This — not `agent_end` — is what `RpcClient.waitForIdle()` now resolves on. |
 | `turn_start` | — | Each turn begins (one assistant response + its tool results). |
 | `turn_end` | `message: AgentMessage`, `toolResults: ToolResultMessage[]` | Each turn completes. |
 | `message_start` | `message: AgentMessage` | Any message (user / assistant / toolResult) begins. |
@@ -142,7 +142,7 @@ Pi emits the `AgentSessionEvent` union (`packages/coding-agent/src/core/agent-se
 
 The `message_update` event's `assistantMessageEvent` field is itself a discriminated union.
 
-> ⚠ **The LIBRARY type and the WIRE shape differ, and reading the wrong one is the standard mistake here.** `AssistantMessageEvent` at `packages/ai/src/types.ts:546-562` still declares `partial: AssistantMessage` on ten of its twelve variants — that is what an **in-process SDK** consumer (`AgentSession`) receives. The **RPC / JSON wire** strips it: `modes/json-event.ts:20-37` (`toJsonAssistantMessageEvent`) deletes `partial` from every variant that has it, and `toJsonEvent` (`:47-61`) rebuilds `message_update` as `{ type, usage, assistantMessageEvent }` — dropping the cumulative `message` too. Applied in RPC at `modes/rpc/rpc-mode.ts` and in print mode at `modes/print-mode.ts`. **So: cite `types.ts` for SDK consumers, `json-event.ts` for wire consumers. `rpc-types.ts` will not tell you — it had an empty diff across the release that made this change.**
+> ⚠ **The LIBRARY type and the WIRE shape differ, and reading the wrong one is the standard mistake here.** `AssistantMessageEvent` at `packages/ai/src/types.ts:652-668` still declares `partial: AssistantMessage` on ten of its twelve variants — that is what an **in-process SDK** consumer (`AgentSession`) receives. The **RPC / JSON wire** strips it: `modes/json-event.ts:20-37` (`toJsonAssistantMessageEvent`) deletes `partial` from every variant that has it, and `toJsonEvent` (`:47-61`) rebuilds `message_update` as `{ type, usage, assistantMessageEvent }` — dropping the cumulative `message` too. Applied in RPC at `modes/rpc/rpc-mode.ts` and in print mode at `modes/print-mode.ts`. **So: cite `types.ts` for SDK consumers, `json-event.ts` for wire consumers. `rpc-types.ts` will not tell you — it had an empty diff across the release that made this change.**
 
 Wire shape (post-strip), which is what an RPC client actually parses:
 
@@ -156,7 +156,7 @@ Wire shape (post-strip), which is what an RPC client actually parses:
 | `toolcall_start` | `contentIndex`, **`id`**, **`toolName`** | New tool call block opened. **`id` + `toolName` ADDED in 0.85.x** (`json-event.ts:24-30`, lifted off `partial.content[contentIndex]` before the strip). Before this, `toolcall_start` carried only `contentIndex` and was not a viable carrier for anything — a client had to wait for `toolcall_end` to learn which tool was being called. |
 | `toolcall_delta` | `contentIndex`, `delta` | Tool-call argument JSON chunk. |
 | `toolcall_end` | `contentIndex`, `toolCall` | Tool call closed; full `toolCall` available. |
-| `done` | `reason: "stop" \| "length" \| "toolUse" \| "deferred"`, `message` | Message complete. Note `"deferred"` is in the union at `types.ts:557-560`. |
+| `done` | `reason: "stop" \| "length" \| "toolUse" \| "deferred"`, `message` | Message complete. Note `"deferred"` is in the union at `extensions/types.ts:561-564`. |
 | `error` | `reason: "aborted" \| "error"`, `error` | Stream errored or was aborted. |
 
 Typical streaming text response wire trace: `start` → `text_start` → many `text_delta` → `text_end` → `done`. With tools: `start` → maybe text → `toolcall_start` → many `toolcall_delta` → `toolcall_end` → `done(toolUse)`.
@@ -167,8 +167,8 @@ Typical streaming text response wire trace: `start` → `text_start` → many `t
 >
 > | | `v0.84.1` | `v0.85.1` |
 > |---|---|---|
-> | `isIdle` | `!this._isAgentRunActive` (`agent-session.ts:883-885`) | `!this._isAgentRunActive && !this.isCompacting` (`:925-927`) |
-> | `abort()` | did not cancel compaction | `abortRetry(); abortCompaction(); abortBranchSummary(); agent.abort(); await waitForIdle();` (`:1619-1625`) |
+> | `isIdle` | `!this._isAgentRunActive` (`agent-session.ts:1172-1174`) | `!this._isAgentRunActive && !this.isCompacting` (`:1234-1236`) |
+> | `abort()` | did not cancel compaction | `abortRetry(); abortCompaction(); abortBranchSummary(); agent.abort(); await waitForIdle();` (`:2075-2085`) |
 >
 > **Consumer consequence:** `abort` still returns only when idle, exactly as before — but an abort landing while auto-compaction or a branch summary is running now waits for *that* to cancel too, so settle can take longer than pre-0.85.0. Nothing about queue semantics changed in this range.
 >

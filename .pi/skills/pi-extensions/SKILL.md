@@ -13,10 +13,13 @@ description: >-
   pre-resource hook), compaction event reason / willRetry fields (0.79.10),
   long-lived-resource discipline (defer to session_start, idempotent
   session_shutdown), or autocomplete triggerCharacters (0.79.1). Also USE WHEN asked about
-  the three events added in 0.85.x — session_compact_failed (the failure
-  counterpart to session_compact, carrying fromExtension) and the
-  ui_prompt_start / ui_prompt_end pair (depth-tracked, fire-and-forget
-  notification that pi is blocking on an extension UI prompt). Also USE WHEN debugging an extension that hangs on
+  events added since 0.85 — session_compact_failed, the ui_prompt_start /
+  ui_prompt_end pair, context_with_system, agent_before_settle,
+  cache_warming_decision — actionable turn_end boundaries (BoundaryResult
+  entries / continue), pi.on() returning an unsubscribe function,
+  before_agent_start returning systemPrompt (forceSystemPrompt) vs mutating
+  systemPromptOptions, registerTool rejecting a missing parameter schema, or
+  user_bash failing closed. Also USE WHEN debugging an extension that hangs on
   ctx.ui, fails to load from ~/.pi/agent/extensions or .pi/extensions, or whose
   hook handler return value is being ignored (including a ui_prompt_* handler
   whose return value is discarded by design). Do NOT use for pi RPC stdio
@@ -50,17 +53,17 @@ Authoring and debugging reference for pi extensions in the pi-mono repo. Each `r
 - "Can this extension share pi's tracker/cache/registry, or does it own process lifecycle?" → `reference/runtime-module-state.md`. Before building any new apex-app extension tool that touches process lifecycle, tool-registration collisions, or settings, consult this expert against source (1ddfbb42 / 9358e605).
 - "Is there an example of X?" → `ls packages/coding-agent/examples/extensions/`.
 - "How do I auto-trust certain cwds for headless pi?" → install a user/global extension with a `project_trust` handler. See **New in 0.79.x — project_trust event** below. Example: `packages/coding-agent/examples/extensions/project-trust.ts`.
-- "Can my extension tell whether the user trusted the project?" → `ctx.isProjectTrusted()` (`extensions/types.ts:331, :1541`). Reflects the live decision including `--approve` overrides and temporary trust, not just persisted `trust.json`.
+- "Can my extension tell whether the user trusted the project?" → `ctx.isProjectTrusted()` (`extensions/types.ts:335, :1541`). Reflects the live decision including `--approve` overrides and temporary trust, not just persisted `trust.json`.
 - "What mode am I in?" → `ctx.mode` is `"tui" | "rpc" | "json" | "print"`. Combined with the (since 0.78.0) `hasUI=true` in RPC, `ctx.mode === "tui"` is the right discriminator for true-TUI behaviour. Don't gate dialogs on `hasUI` alone in RPC — you'll get a hung dialog; pair with `ctx.mode`.
-- "How do I distinguish manual vs threshold vs overflow compaction?" → 0.79.10 added `reason: "manual" | "threshold" | "overflow"` and `willRetry: boolean` to `session_before_compact` (`extensions/types.ts:586-594`) and `session_compact` (`:591-598`). `willRetry` is set when the aborted turn is retried after overflow-triggered compaction.
+- "How do I distinguish manual vs threshold vs overflow compaction?" → 0.79.10 added `reason: "manual" | "threshold" | "overflow"` and `willRetry: boolean` to `session_before_compact` (`extensions/types.ts:590-598`) and `session_compact` (`:595-602`). `willRetry` is set when the aborted turn is retried after overflow-triggered compaction.
 - "Why is my extension factory starting a background process I never see closed?" → 0.79.7 docs added a discipline rule: factories may run in invocations that never start a session (e.g., `pi --list-models`). **Don't** start processes / sockets / file watchers / timers from the factory. Defer to `session_start`; register an idempotent `session_shutdown` handler to close them. See `docs/extensions.md` “Long-lived resources and shutdown”.
-- "Can my custom autocomplete open without a slash prefix?" → Yes since 0.79.1. Provider factories can declare `triggerCharacters: ["#", "$"]`; pi merges them in `interactive-mode.ts:660-666`.
+- "Can my custom autocomplete open without a slash prefix?" → Yes since 0.79.1. Provider factories can declare `triggerCharacters: ["#", "$"]`; pi merges them in `interactive-mode.ts:705-711`.
 
 ## New in 0.79.x — project_trust event
 
 A pre-resource hook that lets user/global and CLI `-e` extensions decide whether to load project-local `.pi/` resources. Fires before any project-local extension is loaded, so project-local extensions cannot participate.
 
-**Event shape** (`extensions/types.ts:518-540`):
+**Event shape** (`extensions/types.ts:522-544`):
 
 ```ts
 interface ProjectTrustEvent { type: "project_trust"; cwd: string }
@@ -68,9 +71,9 @@ type  ProjectTrustEventDecision = "yes" | "no" | "undecided";
 interface ProjectTrustEventResult { trusted: ProjectTrustEventDecision; remember?: boolean }
 ```
 
-**Registration:** `pi.on("project_trust", handler)` (`extensions/types.ts:1219`).
+**Registration:** `pi.on("project_trust", handler)` (`extensions/types.ts:1316`).
 
-**Context (limited):** the handler receives a `ProjectTrustContext` — only `{ cwd, mode, hasUI, ui: { select, confirm, input, notify } }` (`extensions/types.ts:530-535`). **No `sessionManager`, no `getSystemPrompt`, no full UI surface.** Designed for a fast yes/no decision.
+**Context (limited):** the handler receives a `ProjectTrustContext` — only `{ cwd, mode, hasUI, ui: { select, confirm, input, notify } }` (`extensions/types.ts:534-539`). **No `sessionManager`, no `getSystemPrompt`, no full UI surface.** Designed for a fast yes/no decision.
 
 **Resolution semantics:** first user/global or CLI extension that returns `"yes"` or `"no"` owns the decision (`core/project-trust.ts:54-70`). `remember: true` persists the decision into `~/.pi/agent/trust.json`. Returning `"undecided"` defers to later handlers or the built-in flow.
 

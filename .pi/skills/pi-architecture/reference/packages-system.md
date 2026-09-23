@@ -1,6 +1,6 @@
 # Packages System
 
-How `pi install` works, what the `packages` array in `settings.json` does, and how npm packages contribute extensions/skills/prompts/themes via a `pi` field in their `package.json`. All cites against pi-mono at the current pin (`v0.85.1`, `d981de12`). The CLI handler is `package-manager-cli.ts` (`packages/coding-agent/src/package-manager-cli.ts`); the resolver is `DefaultPackageManager` at `packages/coding-agent/src/core/package-manager.ts:767-…`.
+How `pi install` works, what the `packages` array in `settings.json` does, and how npm packages contribute extensions/skills/prompts/themes via a `pi` field in their `package.json`. All cites against pi-mono at the current pin (`v0.87.1`, `f07218c4`). The CLI handler is `package-manager-cli.ts` (`packages/coding-agent/src/package-manager-cli.ts`); the resolver is `DefaultPackageManager` at `packages/coding-agent/src/core/package-manager.ts:767-…`.
 
 ## CLI subcommands
 
@@ -33,7 +33,7 @@ pi install ./local/path
 
 ## settings.json `packages` array
 
-The `Settings.packages` field (`settings-manager.ts:107`) is `PackageSource[]?` (`:76-84`):
+The `Settings.packages` field (`settings-manager.ts:123`) is `PackageSource[]?` (`:92-100`):
 
 ```ts
 type PackageSource = string | {
@@ -54,7 +54,7 @@ Within a single resolution pass, the package manager collects packages from **bo
 
 ## The `pi` manifest in `package.json`
 
-When `pi` resolves a package, it reads the package's `package.json` and looks for a `"pi"` field. Shape: `PiManifest` at `extensions/loader.ts:572-577`:
+When `pi` resolves a package, it reads the package's `package.json` and looks for a `"pi"` field. Shape: `PiManifest` at `extensions/loader.ts:565-570`:
 
 ```jsonc
 {
@@ -67,7 +67,7 @@ When `pi` resolves a package, it reads the package's `package.json` and looks fo
 }
 ```
 
-All four arrays are optional. Paths are resolved relative to the package's root. Files that don't exist are silently dropped during the manifest scan (`extensions/loader.ts:606`). For extensions specifically, `resolveExtensionEntries` (`extensions/loader.ts:531-561`) checks the `pi.extensions` field first; if absent, falls back to `index.ts` / `index.js` at the package root.
+All four arrays are optional. Paths are resolved relative to the package's root. Files that don't exist are silently dropped during the manifest scan (`extensions/loader.ts:599`). For extensions specifically, `resolveExtensionEntries` (`extensions/loader.ts:524-554`) checks the `pi.extensions` field first; if absent, falls back to `index.ts` / `index.js` at the package root.
 
 ## Resolution flow
 
@@ -75,8 +75,8 @@ All four arrays are optional. Paths are resolved relative to the package's root.
 
 1. Read both global and project `settings.json` (`package-manager.ts:2168-2174`).
 2. For each `PackageSource` in either array, parse and resolve to an installed local path (`getInstalledPath`, `:95-100`). Missing sources can trigger `onMissing` to install on demand or skip.
-3. For each installed package, read its `package.json` `pi` field via `readPiManifest` (`extensions/loader.ts:578-585`).
-4. Per resource type (`"extensions" | "skills" | "prompts" | "themes"`, `:193-195`), collect the file paths the manifest declares.
+3. For each installed package, read its `package.json` `pi` field via `readPiManifest` (`extensions/loader.ts:571-578`).
+4. Per resource type (`"extensions" | "skills" | "prompts" | "themes"`, `:169-171`), collect the file paths the manifest declares.
 5. Apply the `PackageSource` object-form filter (if set) to narrow which paths from each manifest survive.
 6. Merge user vs project results: **project-first** for collisions, dedup by absolute path.
 7. Return a `ResolvedPaths` (`package-manager.ts:80-85`) keyed by resource type, each entry a `ResolvedResource` (`:64-68`) carrying `path`, `metadata`, and `enabled`.
@@ -101,8 +101,8 @@ The discovery paths described in `reference/discovery-paths.md` (`<cwd>/.pi/exte
 ## Common gotchas
 
 - **`pi.extensions` can list files that don't exist** — they're silently dropped, not warned. Verify with `ls` after editing the manifest.
-- **The `pi` field must be an object.** If it's a string or array at the top level, `readPiManifest` returns `null` (`extensions/loader.ts:506-511`).
-- **`npmCommand`** is consulted only for `pi install` / `pi update`, not for runtime imports. Runtime extension loading uses `jiti` (`extensions/loader.ts:405-417`).
+- **The `pi` field must be an object.** If it's a string or array at the top level, `readPiManifest` returns `null` (`extensions/loader.ts:499-504`).
+- **`npmCommand`** is consulted only for `pi install` / `pi update`, not for runtime imports. Runtime extension loading uses `jiti` (`extensions/loader.ts:396-408`).
 - **Lockfile contention** during concurrent `pi install` runs uses `proper-lockfile` (`package-manager.ts:866` and surroundings) — concurrent runs serialize rather than corrupt.
 - **Local paths in `packages` are NOT walked recursively** for resources. They follow the same `pi.extensions` manifest contract as npm packages. For ad-hoc local development, prefer the loose `<cwd>/.pi/extensions/` directory.
 
