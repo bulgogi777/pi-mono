@@ -23,8 +23,8 @@ row "KnownProvider union members" \
   "sed the union in packages/ai/src/types.ts, count '| \"x\"' lines"
 
 row "ExtensionAPI.on() overloads" \
-  "$(git show "$PIN":packages/coding-agent/src/core/extensions/types.ts | grep -c '^	on(event: "')" \
-  "grep -c '^<tab>on(event: \"' in extensions/types.ts"
+  "$(git show "$PIN":packages/coding-agent/src/core/extensions/types.ts | awk '/^export interface ExtensionAPI/{f=1} f&&/^}/{f=0} f' | grep -cE '^[[:space:]]*on\(')" \
+  "every 'on(' inside interface ExtensionAPI (multi-line overloads included; single-line grep undercounted 36->33 at v0.85.1, 39->30 at v0.87.1)"
 
 row "ExtensionEvent union members" \
   "$(git show "$PIN":packages/coding-agent/src/core/extensions/types.ts | sed -n '/^export type ExtensionEvent/,/;$/p' | grep -c '^\s*|')" \

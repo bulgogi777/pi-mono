@@ -1,49 +1,46 @@
 ---
 name: pi-prompt-assembly
 description: >-
-  Pi-mono system prompt assembly and Anthropic cache breakpoints. USE WHEN
-  asked how pi builds the system prompt (buildSystemPrompt in
-  system-prompt.ts), customPrompt vs default branch, assembly order
-  (SYSTEM.md → APPEND_SYSTEM → AGENTS.md / <project_context>/<project_instructions> XML block (since 0.75.0; was "# Project Context" Markdown heading pre-0.75.0) → skills via
-  formatSkillsForPrompt → cwd; the "Current date:" line was removed in 0.80.x), the skill-file-read-tool gate on skills
-  (`read` OR `bash` since 0.85.0; `read`-only before), prompt
-  templates, resolvePromptInput, the OAuth Claude Code identity preamble,
-  Anthropic cache_control / cacheRead / cacheWrite / ephemeral cache,
-  getCacheControl, the up-to-4 breakpoint sites in api/anthropic-messages.ts (system
-  :978, OAuth :962 / :969, last tool :1282, last user :1229-1251), what
-  invalidates each, or empty turns from default-prompt through RpcClient.
-  Also covers trust-gated discovery of project SYSTEM.md / APPEND_SYSTEM.md
-  vs the ungated global floor (see pi-architecture for the trust resolution
-  chain itself).
-  Also USE WHEN debugging why AGENTS.md / skill / APPEND_SYSTEM isn't in
-  prompt, or why cache_write spiked. Do NOT use
-  for path discovery (pi-architecture), hook events / ExtensionAPI
+  Pi-mono system prompt assembly and Anthropic prompt caching. USE WHEN asked
+  how pi builds the system prompt (buildSystemPromptSections, the named
+  preamble / tools / rules / docs / addendum / project_context / skills / cwd
+  sections, --system-prompt vs the stock preamble, forceSystemPrompt), how the
+  prompt is stored in and patched through the session transcript, the
+  skill-file-read-tool gate, prompt templates and resolvePromptInput, the OAuth
+  Claude Code identity preamble, or Anthropic cache_control / cacheRead /
+  cacheWrite breakpoints and what invalidates each, including per-model
+  mid-conversation system messages and native tool changes. Also USE WHEN
+  debugging why AGENTS.md / a skill / APPEND_SYSTEM is missing from the
+  prompt, why cache_write spiked, why a prompt edit did or did not invalidate
+  the cache, or empty turns through RpcClient. Do NOT use for path discovery
+  or trust resolution (pi-architecture), hook events / ExtensionAPI
   (pi-extensions), provider / auth (pi-providers), RPC protocol (pi-rpc),
   session JSONL / compaction (pi-sessions), or anything outside pi-mono.
 ---
 
 # pi-prompt-assembly
 
-How pi assembles the system prompt and how Anthropic prompt caching layers on top of it. Each `reference/*.md` is a focused deep-dive with file:line cites — read the matching one rather than reconstructing from memory.
+How pi assembles the system prompt and how Anthropic prompt caching sits on top of it. Each `reference/*.md` is a focused deep-dive with file:line cites; read the one that matches instead of reconstructing from memory.
+
+**Since 0.87.0 the prompt is named sections stored in the session transcript**, not one concatenated string. Anything you remember about a `customPrompt` branch versus a default branch predates that; the cites for it are dead.
 
 ## Reference index
 
-- `reference/assembly-order.md` — section-by-section assembly order for both `buildSystemPrompt` branches (customPrompt and default), with file:line cites. Covers the `formatSkillsForPrompt` interaction and the skill-file-read-tool gate.
-- `reference/cache-breakpoints.md` — the up-to-4 Anthropic `cache_control` sites in `packages/ai/src/api/anthropic-messages.ts`, what each one caches, and what invalidates it. Includes the OAuth identity-preamble case and practical implications for AGENTS.md / skill edits.
-- `reference/prompt-templates.md` — `/template-name` expansion (`expandPromptTemplate` at `core/prompt-templates.ts:269-285`), the `$1` / `$@` / `$ARGUMENTS` / `${@:N:L}` substitution rules, where templates load (global-first, project-second, CLI third), and where in the input pipeline expansion fires (after skill expansion, before the `input` hook).
-- `reference/oauth-identity-preamble.md` — the constant `"You are Claude Code, Anthropic's official CLI for Claude."` system block (`api/anthropic-messages.ts:1069`), `isOAuthToken` detection at `api/anthropic-messages.ts:897-899`, the `claude-code-20250219` / `oauth-2025-04-20` beta headers and Claude-Code identity headers, how it adds the fourth cache breakpoint, and the per-edit invalidation cascade.
-- `reference/known-issues.md` — documented bugs and surprises: empty-turns-through-RpcClient on 0.71.1 (default-prompt branch + missing `toolSnippets`), the `selectedTools: []` skills-gate trap, and the now-resolved daily date-rollover cache invalidation (the `Current date:` line was removed from the system prompt in 0.80.x), with workarounds and source pointers.
+- `reference/assembly-order.md` — the section order, what `--system-prompt` replaces, the skill-file-read-tool gate, how the prompt lives in and is patched through the transcript, and the forced-prompt exception.
+- `reference/cache-breakpoints.md` — the up-to-4 `cache_control` sites in `packages/ai/src/api/anthropic-messages.ts`, transcript resolution by model capability (mid-conversation system messages, native tool changes), and the per-edit invalidation cascade.
+- `reference/prompt-templates.md` — `/template` expansion, the `$1` / `$@` / `$ARGUMENTS` / `${@:N:L}` rules, load order (global, project, CLI), and where expansion fires: **after** the `input` hook, **after** skill expansion.
+- `reference/oauth-identity-preamble.md` — the constant `"You are Claude Code, Anthropic's official CLI for Claude."` block, `isOAuthToken` detection, the OAuth headers and betas, and the fourth breakpoint.
+- `reference/known-issues.md` — empty turns through `RpcClient`, the skills gate trap, the resolved date-rollover issue, and two 0.87 issues: forced prompts opting out of patching, and XML wrappers breaking exact-text assertions.
 
 ## Quick start when asked
 
-- "What goes into the system prompt and in what order?" → `reference/assembly-order.md`.
-- "Why doesn't my AGENTS.md show up?" → `reference/assembly-order.md` (the `<project_context>` block at `core/system-prompt.ts:56-63` (customPrompt branch) and `:151-158` (default branch) only fires when `contextFiles` is non-empty; path discovery itself is **pi-architecture**'s territory). Pre-0.75.0 this block used a `# Project Context` Markdown heading; PR #4541 / #4709 (`7577d3b8`, `aad8cf66`) switched it to XML tags so models stop ingesting prompt content past the boundary.
-- "Why aren't my skills in the system prompt?" → the skill-file-read-tool gate. **Changed in 0.85.0 (upstream #8552).** One `skillFileReadTool` is now computed once at `core/system-prompt.ts:46` — `(["read", "bash"] as const).find((tool) => tools.includes(tool))` — and gates BOTH branches: customPrompt at `:66-67`, default at `:161-162`. So skills now survive a `bash`-only tool set; they disappear only when *neither* `read` nor `bash` is selected. **Prior to 0.85.0 the gate was `read`-only** (`customPromptHasRead` / `hasRead`), and a `bash`-only agent silently lost every skill — that was the bug #8552 fixed. The resolved tool is also passed into `formatSkillsForPrompt(skills, skillFileReadTool)` (`core/skills.ts:355`), which switches the instruction line between "Use the read tool to load a skill's file" and "Use bash to load a skill's file" (`core/skills.ts:365-367`). Skill **bodies** are never in the system prompt — only name/description/location.
-- "Is `.pi/SYSTEM.md` getting loaded in headless RPC?" → no, unless trust is granted. Project `SYSTEM.md` / `APPEND_SYSTEM.md` discovery is **trust-gated** (`resource-loader.ts:1024-1025, :980-981`); the global `~/.pi/agent/SYSTEM.md` / `APPEND_SYSTEM.md` floor is ungated (`:1025-1026, :985-986`). Headless RPC with no `--approve` and no saved trust returns `false` (`core/project-trust.ts:86-87`), so only the global floor loads. For the full resolution chain (extension handler, `defaultProjectTrust`, persisted decisions), read **pi-architecture**'s trust-gating section.
-- "Where are the Anthropic cache breakpoints?" / "What does `cache_control` cache?" → `reference/cache-breakpoints.md`.
-- "What invalidates the cache when I edit APPEND_SYSTEM.md / a skill / AGENTS.md?" → `reference/cache-breakpoints.md` "Practical implications" section.
-- "Why am I getting empty turns through RpcClient?" → `reference/known-issues.md` (TBW); for now, try `--system-prompt` to force the customPrompt branch.
+- "What goes into the system prompt, in what order?" → `assembly-order.md`.
+- "Why doesn't my AGENTS.md show up?" → the `project_context` section is emitted only when `contextFiles` is non-empty (`assembly-order.md`). Discovering which files are in scope belongs to **pi-architecture**.
+- "Why aren't my skills in the prompt?" → the gate requires `read` or `bash` among the selected tools (`assembly-order.md`, `known-issues.md`). Skill **bodies** are never in the prompt.
+- "Did my mid-session AGENTS.md / skill edit invalidate the cache?" → it depends on the model and on whether an extension forces the prompt (`cache-breakpoints.md`, "Practical implications"). On this box every session forces it, through `pai-context`.
+- "Is `.pi/SYSTEM.md` loaded in headless RPC?" → only when the cwd is trusted; the global `~/.pi/agent/SYSTEM.md` floor is ungated (`assembly-order.md`, "Cross-references"; the full chain is **pi-architecture**).
+- "Empty turns through RpcClient?" → `known-issues.md`; pass any non-empty `--system-prompt`.
 
 ## Citation discipline
 
-Always cite `path:line` from pi-mono source. Reference files hold the canonical citations — copy from there rather than reconstructing from memory.
+Cite `path:line` from pi-mono source at the pinned tag. The reference files hold the canonical citations; copy from them rather than reconstructing.

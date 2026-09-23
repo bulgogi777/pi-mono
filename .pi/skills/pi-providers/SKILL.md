@@ -9,15 +9,15 @@ description: >-
   cloudflare-ai-gateway — full KnownProvider in packages/ai/src/types.ts),
   env-var mapping in env-api-keys.ts,
   Anthropic subscription auth and the extra-usage warning at
-  interactive-mode.ts:253,
+  interactive-mode.ts:291,
   --provider / --model / --api-key / --models, /login / /logout, fuzzy /
   glob model matching (resolveModelScope), models.json overrides, or
   pi.registerProvider. Also USE WHEN asked about provider-scoped env: {} blocks in
   auth.json (0.79.5), the global httpProxy setting (0.79.5), Claude Fable
   5 as a first-class Anthropic model (0.79.1), or Mistral session-keyed
   prompt caching (0.79.8). Also USE WHEN asked what changed in the Anthropic
-  auth path in 0.85.x — the impersonated claudeCodeVersion bump (2.1.75 ->
-  2.1.251), getBetaFeatures / mergeClientHeaders extraction and the fact that
+  auth path in 0.85.x — the impersonated claudeCodeVersion (2.1.75 ->
+  2.1.251 -> 2.1.280 in 0.87.1), getBetaFeatures / mergeClientHeaders extraction and the fact that
   an explicit anthropic-beta or user-agent header REPLACES the OAuth identity
   (tested behavior, silently moves billing to extra usage), or auth.json no
   longer being force-chmodded to 0600 on every write. Also USE WHEN debugging
@@ -40,16 +40,16 @@ Provider registry, auth resolution, and model selection reference for pi-mono. E
 
 ## Quick start when asked
 
-- "How does pi resolve my API key?" → `reference/auth-resolution.md`. Order: runtime `--api-key` → `auth.json` (api_key with shell-command / env-var / literal expansion via `resolveConfigValue`, OR oauth with auto-refresh) → env var → `models.json` fallback. Authoritative resolver: `resolveProviderAuth` (`packages/ai/src/auth/resolve.ts:46-77`), reached via `ModelRuntime.getAuth` (`model-runtime.ts:472-493`). **Note the order is override → runtime key → `auth.json` → `models.json` → env** — `models.json` outranks env vars, and a stored `auth.json` entry short-circuits env entirely. Full table in `reference/auth-resolution.md`.
-- "Why does pi say I'm out of Anthropic credits when I have a Max sub?" → `reference/auth-resolution.md`. OAuth tokens (prefix `sk-ant-oat`, detected at `interactive-mode.ts:236-243`) bill against the **third-party-app extra-usage pool**, not your Claude plan — the warning constant `ANTHROPIC_SUBSCRIPTION_AUTH_WARNING` at `interactive-mode.ts:206-208` says exactly that (emitted via `maybeWarnAboutAnthropicSubscriptionAuth` at `:4609`). The pool depletes per token across all third-party harnesses. Switch to `ANTHROPIC_API_KEY` to bill the API account instead.
+- "How does pi resolve my API key?" → `reference/auth-resolution.md`. Order: runtime `--api-key` → `auth.json` (api_key with shell-command / env-var / literal expansion via `resolveConfigValue`, OR oauth with auto-refresh) → env var → `models.json` fallback. Authoritative resolver: `resolveProviderAuth` (`packages/ai/src/auth/resolve.ts:46-77`), reached via `ModelRuntime.getAuth` (`model-runtime.ts:473-494`). **Note the order is override → runtime key → `auth.json` → `models.json` → env** — `models.json` outranks env vars, and a stored `auth.json` entry short-circuits env entirely. Full table in `reference/auth-resolution.md`.
+- "Why does pi say I'm out of Anthropic credits when I have a Max sub?" → `reference/auth-resolution.md`. OAuth tokens (prefix `sk-ant-oat`, detected at `interactive-mode.ts:253-264`) bill against the **third-party-app extra-usage pool**, not your Claude plan — the warning constant `ANTHROPIC_SUBSCRIPTION_AUTH_WARNING` at `interactive-mode.ts:223-225` says exactly that (emitted via `maybeWarnAboutAnthropicSubscriptionAuth` at `:4798`). The pool depletes per token across all third-party harnesses. Switch to `ANTHROPIC_API_KEY` to bill the API account instead.
 - "Is pi using OAuth or my API key?" → `auth.json` entry's `type` field (`api_key` vs `oauth`); `auth-storage.ts:42-55` (the `ApiKeyCredential` / `OAuthCredential` / `AuthCredential` types). Or check whether `ANTHROPIC_OAUTH_TOKEN` is set — it takes precedence over `ANTHROPIC_API_KEY` (`packages/ai/src/env-api-keys.ts:76`).
-- "What's the env var for provider X?" → `reference/built-in-providers.md` table; canonical map at `packages/ai/src/env-api-keys.ts:79-120` (`getApiKeyEnvVars`).
-- "How does `--model "claude-*-sonnet*"` resolve?" → `resolveModelScope` at `model-resolver.ts:371-381` uses `minimatch` (case-insensitive, matches `provider/id` or just `id`, `:288-290`). Also supports a `:thinking-level` suffix (`:265-275`).
+- "What's the env var for provider X?" → `reference/built-in-providers.md` table; canonical map at `packages/ai/src/env-api-keys.ts:79-121` (`getApiKeyEnvVars`).
+- "How does `--model "claude-*-sonnet*"` resolve?" → `resolveModelScope` at `model-resolver.ts:372-382` uses `minimatch` (case-insensitive, matches `provider/id` or just `id`, `:289-291`). Also supports a `:thinking-level` suffix (`:266-276`).
 - "How do I add a custom provider?" → `pi.registerProvider` from an extension (see **pi-extensions** for the registration *event-loop* timing; see `docs/custom-provider.md` for the option shape). For non-coding overrides, `~/.pi/agent/models.json` (see `docs/models.md`).
 - "How do I set provider-specific env vars without polluting my shell?" → 0.79.5 added a per-credential `env: { ... }` block on `ApiKeyCredential` (`auth-storage.ts:42-49`). Use it to scope Cloudflare account/gateway IDs, Vertex project/location, Bedrock settings, `PI_CACHE_RETENTION`, or `HTTP_PROXY`/`HTTPS_PROXY` to one provider's resolution path. `resolveConfigValue` reads `credential.env` before `process.env` (`auth-storage.ts:446`). See `reference/auth-resolution.md` and `docs/providers.md`.
-- "How do I set an HTTP proxy for all of pi?" → 0.79.5 added a global `httpProxy` setting in `~/.pi/agent/settings.json` (`settings-manager.ts:133`). Applied as both `HTTP_PROXY` and `HTTPS_PROXY` to all pi-managed HTTP clients via `applyHttpProxySettings` (`http-dispatcher.ts:44-47`). Process-env values still win if pre-set; the setting fills in via `??=`.
+- "How do I set an HTTP proxy for all of pi?" → 0.79.5 added a global `httpProxy` setting in `~/.pi/agent/settings.json` (`settings-manager.ts:149`). Applied as both `HTTP_PROXY` and `HTTPS_PROXY` to all pi-managed HTTP clients via `applyHttpProxySettings` (`http-dispatcher.ts:44-47`). Process-env values still win if pre-set; the setting fills in via `??=`.
 - "What's the default Anthropic model now?" → `claude-opus-4-8`, set in `defaultModelPerProvider` at `model-resolver.ts:23` (since 0.77.0). Claude Fable 5 was added as a first-class Anthropic model in 0.79.1; **Claude Opus 5 (`claude-opus-5`) shipped in the built-in catalog at v0.82.1** (generator `921c3543`, Bedrock `af3b934f`) — the default still did **not** change. ⚠️ Model-entry cites are no longer resolvable in-tree: the catalog moved to `packages/ai/src/providers/data/<provider>.json`, which is **gitignored** and generated at build. To verify a model entry, unpack the published tarball (`npm pack @earendil-works/pi-ai@<version>` → `package/dist/providers/data/anthropic.json`), not the pinned tree.
-- "Does Mistral support pi's prompt cache?" → Yes since 0.79.8. Mistral sessions use provider-side caching keyed by pi's session ID as `promptCacheKey` (`packages/ai/src/api/mistral-conversations.ts:521` — moved from `providers/mistral.ts` in the 0.80.x provider split).
+- "Does Mistral support pi's prompt cache?" → Yes since 0.79.8. Mistral sessions use provider-side caching keyed by pi's session ID as `promptCacheKey` (`packages/ai/src/api/mistral-conversations.ts:527` — moved from `providers/mistral.ts` in the 0.80.x provider split).
 
 ## Citation discipline
 

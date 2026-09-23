@@ -6,6 +6,99 @@ Citations: `<sha>` for commit; `<file>:<line>` against the **new pin** (unless o
 
 ---
 
+## 2026-09-22 — pulled to `f07218c4` (v0.87.1)
+
+**Trigger:** the runtime moved first. The installed pi and apex-app's devDependency were already at `0.87.1` (auth-delegator-5, apex-app workitem `c850ecbb`) while this expert was pinned at `v0.85.1`, which set off both staleness tripwires in `sources.md`. Bogie authorized the full procedure, push included.
+
+**Previous pin:** `d981de12` (`v0.85.1`). **New pin:** `f07218c4` (`v0.87.1`, the release tag equal to the runtime). **Diff scope:** 213 commits; 647 files under `packages/`, +78,794/−21,678.
+
+### Order of operations (as run)
+
+1. **Runtime gates, on the live 0.87.1 install, before touching the fork.** All passed (high, measured):
+   - Gate 1: consult smoke returned `pong` in 3.64s and exited 0.
+   - Gate 2: the OAuth call billed through the cached path, `cacheWrite=126292`.
+   - Gate 3: `anthropic: "claude-opus-4-8"` in the installed `model-resolver.js`.
+   - Gate 4: `isProjectTrusted` present in the installed `resource-loader.js`, and `hasUI` gates in both `project-trust.js` files.
+   - Gate 5: the consult session record shows `anthropic` / `claude-opus-5`, the configured value, and both daemons carry `claude-opus-5` in `/proc/<pid>/environ`. No model flip was required.
+   - Gates 6 and 7: run in the entry below.
+2. **Trust review of `.pi/` from `v0.85.1` to `v0.87.1`:** three content files. `prompts/cl.md` changed its URL from `pi-mono` to `pi`; `skills/release.md` and `skills/interactive-testing.md` are new upstream skills. **No `.pi/extensions/` change**: the four-file baseline has an empty diff. `release.md` documents the push/tag release script and is now loadable by trusted sessions here. It is instructions, not code, and guardrail 3 (never push unasked) covers it (high).
+3. **Fork sync.** `main` fast-forwarded to `v0.87.1`. `expert/main` rebased cleanly: 36 commits, 49 paths, **zero** outside `.pi/` and `.claude/`. The pre-rebase head `aa5875d40` is in the reflog.
+4. **Qualify cites at the old pin.** 22 rewrites applied, plus 27 bare `main.ts` cites resolved by hand **by bounds, not likelihood**: `experimental/mini/main.ts` was 24 lines at `v0.85.1` and every cite was at line ≥114, so each could only mean `src/main.ts`. Result at `v0.85.1`: 793 unique, 0 to qualify, 0 unresolvable.
+5. **Pass 1 (drift).** 1,103 of 1,250 live cites matched and 721 rewrites were applied. 113 were NOTFOUND ("mechanism changed"), 76 of them in `pi-prompt-assembly`.
+6. **Pass 2 (errors) plus gap-scan,** described below. **End state at the new pin (high, measured):** `reanchor-cites.ts v0.87.1 v0.87.1` gives **1,331 live cites, 0 ambiguous, 0 not found, 0 rewrites**. `verify-symbol-cites.ts v0.87.1` gives 166 pairs with 4 flagged, all confirmed intentional: three class in-body anchors, and one **tool false positive** where `validateForkFlags` is paired with its call at `src/main.ts:649` instead of its declaration at `:298`. No descending ranges.
+
+### Behavior changes that matter (all cited at `v0.87.1`)
+
+- **Prompt assembly rewritten (0.87.0), high.** `pi-prompt-assembly` was rewritten, not re-anchored.
+  - The two-branch `buildSystemPrompt` is gone. `buildSystemPromptSections` (`core/system-prompt.ts:121-179`) emits named sections in order: `preamble` (not wrapped), then `tools`, `rules`, `docs`, `addendum`, `project_context`, `skills`, `cwd`, and any custom sections, each wrapped in XML (`:175-178`).
+  - `--system-prompt` still replaces only the preamble and drops tools, rules and docs.
+  - **The prompt is persisted in the session transcript** as a system message. Changes are appended as section patches (`core/agent-session.ts:1407-1421`).
+- **Cache breakpoints re-derived (0.86/0.87), high.**
+  - System text is now the transcript's *initial* system message (`api/anthropic-messages.ts:1043-1044`).
+  - The conversation breakpoint also lands on a trailing `system` message (`:1402`).
+  - Tool caching is gated by `supportsCacheControlOnTools` (`:1114`).
+  - Native tool changes keep the tool block stable (`:1115-1137`).
+  - Whether a mid-session prompt edit preserves the cache depends on the model's `supportsMidConvoSystemMessages`. Measured from the 0.87.1 tarball: **true for `claude-opus-5`, `claude-opus-5-5` and `claude-opus-4-8`; unset (false) for `claude-sonnet-5` and `claude-haiku-4-5`.**
+- **A forced prompt collapses patching on every model, high.** A `before_agent_start` handler returning `systemPrompt` sets `forceSystemPrompt`, and the request is projected to a single head (`agent-session.ts:1433-1448`). `pai-context.ts:222` does this in every APEX session, so **APEX sessions do not benefit from 0.86's mid-session patching even on Opus**. Nothing breaks: chaining is preserved (`runner.ts:1318`). The alternative is to mutate `systemPromptOptions`. Recorded as a known issue, and already relayed to apex-app (`c850ecbb`).
+- **Extensions, high.**
+  - New events: `context_with_system`, `agent_before_settle`, `cache_warming_decision`.
+  - `turn_end` is an actionable boundary emitted through `emitBoundary`, not `emit()`.
+  - `pi.on()` returns an unsubscribe function.
+  - `registerTool` throws on a missing object schema (`core/extensions/loader.ts:273-280`).
+  - `user_bash` fails closed.
+  - `context` handlers no longer see system messages.
+- **Sessions, high.**
+  - `SessionEntry` has 11 members (was 9), adding `usage` and `context_edit`.
+  - `buildSessionContext` is a thin wrapper over `buildSessionProjection` (`core/session-manager.ts:543-583`).
+  - `getDefaultSessionDirPath(cwd, agentDir)` roots sessions under `<agentDir>`, which matters for the agent-dir farm.
+- **SDK, high.** `shouldStopAfterTurn` was removed in favour of `finishTurn` (`packages/agent/src/types.ts:260`). coding-agent wraps it to dispatch `turn_end` (`agent-session.ts:675-685`).
+- **Providers, high.** `KnownProvider` has 41 members, adding `meta`. `claudeCodeVersion` is now `2.1.280` (`api/anthropic-messages.ts:87`).
+- **Docs split, high.** `docs/rpc.md` is now a 192-line overview; the reference moved to `rpc-commands.md`, `rpc-extension-ui.md` and `json.md`. Every doc cite was re-checked by content.
+
+### Errors found that predate this upgrade (the error pass's real yield)
+
+These were wrong at `v0.85.1` too, and content matching had carried each forward. Each was corrected with its original value left legible where it was a claim, not just a line number (high):
+
+- **Enumeration undercounts.** `ExtensionAPI.on()` overloads were recorded as 33 at `v0.85.1` (true 36) and 30 at `v0.84.1` (true 33). `recount-enumerations.sh` itself did the single-line `grep`, and **the script is fixed**. `pi-providers/cli-flags.md` said "27 built-ins"; `v0.85.1` already had 40. (high)
+- **Wrong anchors.** `extension-api.md` cited `registerMessageRenderer`, `appendEntry`, `setSessionName`, `setLabel`, `exec`, `registerCommand` and others at unrelated lines, mostly `on(...)` overloads. (high)
+- **Wrong emit sites.** The whole emit-site column of `hook-events.md` was wrong; for example, `turn_start` and `message_update` both pointed at retry-counter code. It was re-derived for all 39 events. (high)
+- **Missing catalog rows.** `hook-events.md` omitted `agent_settled`, `before_provider_headers` and `session_info_changed`. Rows added. (high)
+- **Wrong RPC wire-type cites.** `extension-ui-bridge.md` cited the wire-type unions at `:198-235`, yet `rpc-types.ts` is byte-identical across the range. The unions are at `:246-281` and `:288-291`. (high)
+- **Stale session cites.** The `jsonl-format.md` catalog rows and the `branching-resume.md` dispatch table cited an older `main.ts` layout. (high)
+- **Inverted input order.** `prompt-templates.md` claimed template expansion runs **before** the `input` hook. At `v0.85.1` `emitInput` (`:1186`) already ran before `expandPromptTemplate` (`:1206`), and it still does. `hook-events.md` had this right. (high)
+- **Stale docs cites.** `pi-rpc/SKILL.md` and `protocol.md` cited framing at `rpc.md:29-40`; it is now `:50-54`. These were in bounds, so no drift check could see them. (high)
+
+### Tool defects found (not fixed; logged here)
+
+- **`verify-symbol-cites.ts`** pairs a non-exported function with its call site. `validateForkFlags` is declared at `src/main.ts:298` and called at `:649`; the tool suggests `:649`, and `--fix` would make the cite wrong. **Do not run `--fix` without reading each suggestion** (high).
+- **expert-toolkit `verb-self-update.md`** extracts the old pin with `awk '/Current pin:/ {print $3}'`, which returns `pin:**` against this file's format. Field 4 holds the SHA, and the same result appears at `afdbe1759`, so the defect is pre-existing (high). It belongs to the skill's owner, not this repo.
+
+### Gate 7 (agent-dir farm) for this range
+
+The addendum to the 2026-09-22 check entry below covers it. One addition from the session re-derivation: `sessions/` resolves under `<agentDir>` (`core/session-manager.ts:589-594`). The farm symlinks `sessions/`, but each file is per-session, so there's no shared-document writer and it needs no change (high).
+
+### Breaking changes (for consumers of this expert)
+
+- [x] **Any cite into `core/system-prompt.ts`, or any claim about a "customPrompt branch", is dead.** Re-ask rather than reuse an old answer. (high)
+- [x] **The pre-0.87 `pi-prompt-assembly` reference is retrievable** at `8c3a28f62` (the rebased self-update commit, on `origin/expert/main` after this push): `git show 8c3a28f62:.pi/skills/pi-prompt-assembly/reference/assembly-order.md`. (high) The pre-rebase `afdbe1759` exists only in the local reflog and was never pushed.
+- [x] **Rebase changed every expert commit SHA.** `aa5875d40` (gate 7, sent to auth-delegator-5) is now `b0f100a9b` after the rebase, with content unchanged (high) and `.pi/kb/agent-dir-farm.md` keeps its path.
+
+### kb files touched
+
+- `.pi/kb/sources.md`: pin bumped, with the confidence-rules "today" line updated to match.
+- `.pi/kb/version-log.md`: this entry.
+- `.pi/scripts/recount-enumerations.sh`: overload counting fixed.
+- Territorial skills, 38 files in total including the above. The largest changes:
+  - `pi-prompt-assembly`: SKILL.md, `assembly-order.md`, `cache-breakpoints.md` and `known-issues.md` rewritten; `oauth-identity-preamble.md` and `prompt-templates.md` patched.
+  - `pi-extensions`: `extension-api.md`, `hook-events.md`, `loading.md`, `runtime-module-state.md` and `tools.md`.
+  - `pi-sessions`: `jsonl-format.md`, `branching-resume.md`, `compaction.md`, `cli-flags.md` and SKILL.md.
+  - `pi-rpc`: `sdk-embedding.md`, `protocol.md`, `extension-ui-bridge.md` and SKILL.md.
+  - `pi-providers`: `built-in-providers.md`, `auth-resolution.md`, `cli-flags.md`, `custom-providers.md` and SKILL.md.
+  - `pi-architecture`: `cli-flags.md` and `discovery-paths.md`.
+  - The rest are line-number-only rewrites from pass 1.
+
+---
+
 ## 2026-09-22 — checked; pin unchanged at `d981de12` (v0.85.1); four releases now pending upstream
 
 **Trigger:** routine `self-update`.
