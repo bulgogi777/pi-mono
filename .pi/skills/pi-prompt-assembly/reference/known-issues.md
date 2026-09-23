@@ -1,128 +1,102 @@
 # Known Issues
 
-Bugs and behavioral surprises in pi's system-prompt assembly path. All cites against the current pin (`v0.85.1`, `d981de12`). Issues are listed with: symptom, root cause, workaround, and source pointers. When known, version markers track when an issue was first observed.
+Bugs and surprises in pi's system-prompt assembly. All cites are against the current pin (`v0.87.1`, `f07218c4`) and `packages/coding-agent/src/core/system-prompt.ts` unless another file is named. Each issue gives the symptom, root cause, workaround and source pointers, plus version markers where known.
 
-## Empty turns through `RpcClient` on the default-prompt branch (observed 0.71.1)
+> **Re-derived 2026-09-22 for 0.87.0.** The two-branch `buildSystemPrompt` these issues were written against no longer exists. The prompt is now named sections (see `reference/assembly-order.md`). Each issue below is re-expressed in section terms, and its old branch/line references are gone. Two issues are new in 0.87 (the last two sections).
+
+## Empty turns through `RpcClient` when no custom prompt is set (observed 0.71.1)
 
 ### Symptom
 
-A host program embeds pi via `RpcClient` (subprocess), sends a `prompt` command, and receives `agent_start` → `agent_end` with no `message_*` events in between. The agent appears to do nothing, or returns empty assistant content. Reproducible **only** when:
+A host embeds pi through `RpcClient` (a subprocess) and sends a `prompt`. It receives `agent_start` → `agent_end` with no `message_*` events in between, or empty assistant content. The symptom reproduces **only** when both hold:
 
 - `--system-prompt` is **not** passed.
-- `<cwd>/.pi/SYSTEM.md` and `~/.pi/agent/SYSTEM.md` are **not** present.
+- Neither `<cwd>/.pi/SYSTEM.md` nor `~/.pi/agent/SYSTEM.md` exists.
 
-So pi takes the **default-prompt branch** (`packages/coding-agent/src/core/system-prompt.ts:75-167`) rather than the customPrompt branch (`:48-73`).
+In that case `customPrompt` is unset, so `buildSystemPromptSections` emits pi’s stock preamble plus the default `tools`, `rules` and `docs` sections (`core/system-prompt.ts:145-160`). With `customPrompt` set, only the preamble is replaced and those three are skipped (`:143-144`).
 
-Once any of these holds, the issue goes away:
+### Why it shows up through `RpcClient`
 
-- Pass `--system-prompt "..."` (or `--system-prompt /path/to/file.md`).
-- Place a `SYSTEM.md` at `<cwd>/.pi/SYSTEM.md` or `~/.pi/agent/SYSTEM.md`.
-- Run pi interactively (`--mode rpc` is a precondition for the symptom).
-
-### Where the two branches diverge
-
-`buildSystemPrompt` chooses between two complete code paths:
-
-- **customPrompt branch** (`core/system-prompt.ts:48-73`): `customPrompt` body verbatim → APPEND_SYSTEM → `<project_context>` XML block wrapping AGENTS.md (`:56-63`; pre-0.75.0 this was a `# Project Context` Markdown heading) → skills (gated on `read` tool, `:65`) → cwd (the `Current date:` line was removed in 0.80.x). No auto-generated preamble, no auto-tools list, no auto-guidelines.
-- **default-prompt branch** (`core/system-prompt.ts:75-167`): hard-coded `"You are an expert coding assistant…"` preamble (`:127-144`) → `Available tools:` table (filtered by `toolSnippets`, `:82-84`) → auto-derived `Guidelines:` block (built `:87-125`, rendered `:134-135`) → Pi documentation block with absolute paths (`:137-144`) → APPEND_SYSTEM (`:146-148`) → `<project_context>` XML block (`:151-158`) → skills gate (`:155`) → cwd (`:165`; no date line since 0.80.x).
-
-The default branch is much longer. Section ordering is identical from APPEND_SYSTEM onward; the difference is the preamble + tools + guidelines + docs that prepends.
-
-### Why it manifests through `RpcClient` specifically
-
-The default branch's tools list (`Available tools:` at `:90-93`) only fills in for tools where `toolSnippets[name]` is set. In an RPC-host setup, the host typically provides no `toolSnippets` because tools are negotiated programmatically. The result is `(none)` for the tools list (`:93`). Combined with the auto-derived guidelines that reference `read`/`bash`/`grep`/`find`/`ls` (`:118-131`), the resulting system prompt can give the model conflicting signals — "you have these tools" but the tool list is empty.
-
-The exact mechanism by which this produces empty assistant turns is environment-dependent (model-specific); the pragmatic fix is to force the customPrompt branch.
+The `tools` section lists only tools that have a `toolSnippets` entry and renders `(none)` otherwise (`:148-151`). An RPC host usually supplies no snippets, so the prompt claims no tools while the `rules` section (`buildRules`, `:81-118`) still gives read/bash/grep guidance. The model gets conflicting signals. How that becomes an empty turn depends on the model.
 
 ### Workaround
 
-Pass any non-empty `--system-prompt` value. Even `--system-prompt " "` flips pi into the customPrompt branch (`:55` is `if (customPrompt)` — truthy check on the resolved string). For host code:
+Pass any non-empty `--system-prompt`. The check is a truthy `if (customPrompt)` (`:143`), so even `" "` works. Alternatively, supply a `SYSTEM.md`. `discoverSystemPromptFile` (`core/resource-loader.ts:1027-1039`) prefers project over global, and the project path is **trust-gated** (`:1029`): headless RPC without `--approve` or a saved trust decision loads only the global file (`:1033`).
 
 ```ts
-const client = new RpcClient({
-  args: ["--system-prompt", "You are a helpful coding assistant."],
-  // ...
-});
+const client = new RpcClient({ args: ["--system-prompt", "You are a helpful coding assistant."] });
 ```
-
-Or supply a `SYSTEM.md` at one of the auto-discovery paths:
-
-- `<cwd>/.pi/SYSTEM.md` (project, wins)
-- `~/.pi/agent/SYSTEM.md` (global)
-
-See `discoverSystemPromptFile` at `resource-loader.ts:1023-1035` for the discovery order. **Trust-gating caveat (0.79.x):** the project `<cwd>/.pi/SYSTEM.md` path is gated by `isProjectTrusted()` (`:1025`); in headless RPC without `--approve` or a saved trust decision, only the ungated global `~/.pi/agent/SYSTEM.md` (`:1023-1025`) loads. Trust resolution chain lives in **pi-architecture**.
 
 ### Status
 
-Open as of 0.71.1. The default-prompt branch should arguably degrade more gracefully when `toolSnippets` is empty in an RPC host — at minimum, skipping the `Available tools:` block entirely rather than rendering `(none)`. No upstream fix landed yet.
+Open as of 0.71.1; not re-tested at 0.87.1. No upstream fix has landed. The sectioned builder still renders `tools` as `(none)` rather than omitting it.
 
-## Historical note: project-context block migrated from Markdown headings to XML tags (0.75.0)
+## Project-context block: from Markdown headings to XML (0.75.0), then to a section (0.87.0)
 
-Pre-0.75.0, both branches emitted a Markdown `# Project Context` block with `## <absolute-path>` per file. PRs #4541 (`7577d3b8`) and #4709 (`aad8cf66`) changed both branches to wrap context in `<project_context>` / `<project_instructions path="...">` XML tags so models stop ingesting prompt content past the boundary when an AGENTS.md itself contains Markdown headings.
-
-Current shape (both branches, at the current pin `v0.85.1` / `d981de12`):
+Before 0.75.0 the block was a Markdown `# Project Context` heading with `## <absolute-path>` per file. PRs #4541 (`7577d3b8`) and #4709 (`aad8cf66`) moved it to XML so a Markdown heading inside an AGENTS.md cannot escape the block. Since 0.87.0 the block is the `project_context` **section** (`:164`). Its body comes from `renderProjectContext` (`:72-79`) and the section wrapper adds the outer tags (`:175-178`):
 
 ```
-\n\n<project_context>\n\n
-Project-specific instructions and guidelines:\n\n
-<project_instructions path="<absolute-path>">\n<content>\n</project_instructions>\n\n
-... (repeats per context file) ...
-</project_context>\n
+<project_context>
+Project-specific instructions and guidelines:
+
+<project_instructions path="<absolute-path>">
+<content>
+</project_instructions>
+
+… (one per context file, joined by a blank line) …
+</project_context>
 ```
 
-CustomPrompt branch: `core/system-prompt.ts:60-67`. Default branch: `core/system-prompt.ts:153-161`. Both emit identical wrapping; the only behavioral difference between branches remains the auto-generated preamble/tools/guidelines/Pi-docs that the default branch prepends.
+It is emitted only when `contextFiles.length > 0`. With or without `--system-prompt`, the rendering is the same.
 
-Kb material that referenced the old `# Project Context` / `## <abs-path>` shape was corrected in the 2026-05-23 `self-update` (see `.pi/kb/version-log.md`).
-
-## Skills section is silently dropped when `selectedTools` is `[]`
+## Skills section silently dropped when neither `read` nor `bash` is selected
 
 ### Symptom
 
-A caller passes `selectedTools: []` (no tools at all), and the skills section vanishes from the system prompt — no `<available_skills>` block, no skill metadata in the prompt at all.
+No `<available_skills>` block and no skill metadata in the prompt, typically when a caller passes `selectedTools: []`.
 
 ### Cause
 
-**Since 0.85.0** both branches share ONE gate, computed at `core/system-prompt.ts:46`:
+A single gate: `skillFileReadTool = (["read", "bash"] as const).find((tool) => selectedTools.includes(tool))` (`:165`), applied at `:166`. `selectedTools` defaults to `["read", "bash", "edit", "write"]` in `normalizeBuildSystemPromptOptions` (`:58`), so `undefined` lets skills through only because the default contains `read`. An explicit `[]` drops them.
 
-```ts
-const tools = selectedTools || ["read", "bash", "edit", "write"];               // :45
-const skillFileReadTool = (["read", "bash"] as const).find((t) => tools.includes(t));  // :46
-```
+> **History.** Before 0.85.0 (upstream #8552) the gate was `read`-only, so a `bash`-only tool set lost every skill. 0.85.0 widened it to `read` OR `bash`. 0.87.0 left it unchanged but moved it into the single sections builder.
 
-Applied at `:66` (customPrompt) and `:161` (default). With explicit `selectedTools: []`, `tools` is `[]`, `skillFileReadTool` is `undefined`, and the skills section is skipped in both branches.
+### Why it matters
 
-> **Scope narrowed in 0.85.0 (upstream #8552).** Before 0.85.0 the gate was `read`-only — `hasRead = tools.includes("read")` in the default branch, `customPromptHasRead = !selectedTools || selectedTools.includes("read")` in the customPrompt branch. A **`bash`-only tool set therefore lost every skill**, which is the bug #8552 fixed. Two consequences for anything written against the old behavior: (a) `bash`-without-`read` is no longer a repro for this symptom; (b) the customPrompt branch's `!selectedTools` short-circuit is **gone** — `undefined` now lets skills through only because it falls back to the 4-tool default at `:45`, which contains `read`. Same outcome, different mechanism.
-
-### Why this matters
-
-The `<available_skills>` block is the model's only signal that skills exist (the body of each `SKILL.md` is loaded later, on demand). Without *either* reading tool and without the listing, skill invocation cannot work — even via `/skill:name`. That is the whole rationale for the gate: listing a skill the agent has no way to open is dead weight in the prompt.
+`<available_skills>` is the model's only signal that skills exist. A `SKILL.md` body is loaded on demand with a tool call. Listing skills the agent cannot open would be dead weight, which is the whole rationale for the gate.
 
 ### Workaround
 
-Always include `"read"` in `selectedTools` if you want skills to surface. If `read` is genuinely unavailable, skills cannot work in this configuration; consider alternatives (preset slash commands, prompt templates).
+Include `read` (or `bash`) in `selectedTools`. Without either, skills cannot work. Use prompt templates or slash commands instead.
 
-## Date rollover invalidates the system-prompt cache — RESOLVED in 0.80.x
+## Date rollover invalidated the system-prompt cache (RESOLVED in 0.80.x)
 
-### Symptom (historical)
+Before 0.80.x, `\nCurrent date: YYYY-MM-DD` sat just before the cwd line, so the first request after local midnight rewrote the cached system block. The line was removed in 0.80.x (`f4e9ca74`, #6621). The prompt now ends with the `<cwd>` section (`:170`), which contains no date. A host that needs the date must inject it per turn, outside the cached prefix.
 
-Pre-0.80.x: the first request after midnight local time produced a full `cacheWrite` for the system prompt, even though nothing about the user-facing config changed.
+## NEW in 0.87: a `before_agent_start` handler that returns `systemPrompt` opts the session out of prompt patching
 
-### Cause (historical)
+### Symptom
 
-`buildSystemPrompt` used to append `\nCurrent date: YYYY-MM-DD` as the very last system-prompt line before `\nCurrent working directory:`. When `YYYY-MM-DD` rolled over, the system-prompt text changed, and Anthropic cache breakpoint #1b (now `api/anthropic-messages.ts:1077`) or #2 (`:1067` in OAuth mode) invalidated.
+Pi 0.87 appends mid-session prompt changes as cheap section patches on models that support mid-conversation system messages (`reference/cache-breakpoints.md`). A session whose extension returns `systemPrompt` never gets that: each change rewrites the head and invalidates the whole cached prefix, even on Opus.
 
-### Status
+### Cause
 
-**Resolved.** The `Current date:` line was removed from the system prompt entirely in 0.80.x (commit `f4e9ca74`, fixes #6621). `buildSystemPrompt` now ends at `\nCurrent working directory:` (`core/system-prompt.ts:69` customPrompt branch, `:165` default) with no date, so this daily cache invalidation no longer occurs. If a host needs the model to know the date, it must inject it itself (e.g. via a per-prompt context block), which keeps it out of the cached system prefix.
+A returned `systemPrompt` becomes `forceSystemPrompt` (`core/extensions/runner.ts`, `emitBeforeAgentStart` `:1312-1364`). A forced prompt is opaque: `buildSystemPromptState` returns content with no sections (`:186-192`). At request time `_installAgentForcedPromptProjection` (`core/agent-session.ts:1433-1448`) collapses every system message into a single head holding the forced text. The transcript still records the structured sections, so the loss applies only to what is sent.
+
+**On this box:** `~/.pi/agent/extensions/pai-context.ts` returns `systemPrompt` (`${ev.systemPrompt}\n\n${injected}`) in every pi session, and apex-app's `cora-context-inject` does the same in Cora sessions. Every APEX session is on this path. Nothing breaks: chaining still works, because a second handler's `event.systemPrompt` getter renders the options the first handler already forced (`runner.ts:1318`). The cost is that prompt caching depends on the injected text staying byte-identical from turn to turn.
 
 ### Workaround
 
-No longer needed — the date is no longer in the system prompt. (Pre-0.80.x there was no upstream workaround; hosts re-running pi for many short sessions per day paid the cost once per session-start.)
+Mutate `event.systemPromptOptions` instead of returning a string. It is `NormalizedBuildSystemPromptOptions`, with mutable `sections`; later handlers see the mutations, and the structure survives. `event.systemPrompt` is `readonly` since 0.87.0, so assigning to it is also a type error.
+
+## NEW in 0.87: exact-text assertions on the system prompt break
+
+The rendered prompt now carries literal `<addendum>`, `<project_context>`, `<skills>` and `<cwd>` wrappers (`:175-178`). Before 0.87 the same content was bare concatenated text. A test or tool that asserts on system-prompt text or a leading substring must expect the wrappers. The `preamble` section is **not** wrapped, so a check limited to the first line (the `--system-prompt` text) still holds.
 
 ## Cross-references
 
-- The branches in detail (assembly order, conditions, what each section emits): `reference/assembly-order.md`.
-- Cache breakpoint sites and the per-edit invalidation cascade: `reference/cache-breakpoints.md`.
-- OAuth identity preamble (separate breakpoint, separate cache lifecycle): `reference/oauth-identity-preamble.md`.
-- The `discoverSystemPromptFile` and `discoverAppendSystemPromptFile` discovery rules: **pi-architecture** `reference/discovery-paths.md`.
-- `--system-prompt` flag mechanics: **pi-architecture** `reference/cli-flags.md`.
+- Section order and the transcript-backed prompt: `reference/assembly-order.md`.
+- Breakpoint sites and the per-model invalidation cascade: `reference/cache-breakpoints.md`.
+- OAuth identity preamble: `reference/oauth-identity-preamble.md`.
+- `discoverSystemPromptFile` / `discoverAppendSystemPromptFile`: **pi-architecture** `reference/discovery-paths.md`.
+- `before_agent_start` result contract: **pi-extensions** `reference/hook-events.md`.

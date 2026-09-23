@@ -1,18 +1,18 @@
 # Built-in Providers
 
-Full table of providers pi knows about at the current pin, plus model-selection mechanics. All cites against the current pin (`v0.85.1`, `d981de12`).
+Full table of providers pi knows about at the current pin, plus model-selection mechanics. All cites against the current pin (`v0.87.1`, `f07218c4`).
 
-## The `KnownProvider` union (40 providers)
+## The `KnownProvider` union (41 providers)
 
-> Count re-verified 2026-09-06 at `v0.85.1` — the union is `packages/ai/src/types.ts:35-74`, still **40** (no providers accrued across 0.84.2 → 0.85.1). Previously re-verified 2026-08-13 at `v0.84.1`, also 40. Two accrued since `v0.82.1`: `baseten` and `qwen-token-plan-individual`. (History: it sat at a documented 28 while the union held 38 — ten had accrued unnoticed.) Re-count this against the union on every `gap-scan`; it drifts silently and no cite check catches it.
+> Count re-verified 2026-09-22 at `v0.87.1` — the union is `packages/ai/src/types.ts:35-76`, now **41**: `meta` (Meta Muse subscription, 0.86.1, `types.ts:67`) accrued across 0.85.1 → 0.87.1. Measured by `.pi/scripts/recount-enumerations.sh v0.87.1`. Re-verified 2026-09-06 at `v0.85.1` — the union was `:35-75`, **40** (no providers accrued across 0.84.2 → 0.85.1). Previously re-verified 2026-08-13 at `v0.84.1`, also 40. Two accrued since `v0.82.1`: `baseten` and `qwen-token-plan-individual`. (History: it sat at a documented 28 while the union held 38 — ten had accrued unnoticed.) Re-count this against the union on every `gap-scan`; it drifts silently and no cite check catches it.
 
-Defined at `packages/ai/src/types.ts:35-74` as a string-literal union of provider IDs. The current set:
+Defined at `packages/ai/src/types.ts:35-76` as a string-literal union of provider IDs. The current set:
 
 ```
 amazon-bedrock, ant-ling, anthropic, azure-openai-responses, baseten,
 cerebras, cloudflare-ai-gateway, cloudflare-workers-ai, deepseek,
 fireworks, github-copilot, google, google-vertex, groq, huggingface,
-kimi-coding, minimax, minimax-cn, mistral, moonshotai, moonshotai-cn,
+kimi-coding, meta, minimax, minimax-cn, mistral, moonshotai, moonshotai-cn,
 nvidia, openai, openai-codex, opencode, opencode-go, openrouter,
 qwen-token-plan, qwen-token-plan-cn, qwen-token-plan-individual, radius,
 together, vercel-ai-gateway, xai, xiaomi, xiaomi-token-plan-ams,
@@ -21,11 +21,11 @@ xiaomi-token-plan-cn, xiaomi-token-plan-sgp, zai, zai-coding-cn
 
 `xiaomi` was added in **v0.72.0** (Xiaomi MiMo Token Plan, Anthropic-compatible).
 
-`ProviderId` (`extensions/types.ts:76`) widens this to `KnownProvider | string` so extensions can register custom IDs (see `pi.registerProvider`).
+`ProviderId` (`extensions/types.ts:80`) widens this to `KnownProvider | string` so extensions can register custom IDs (see `pi.registerProvider`).
 
 ## Per-provider auth and env vars
 
-The single source of truth for env-var → provider mapping is the `envMap` in `getApiKeyEnvVars` (`packages/ai/src/env-api-keys.ts:79-116`). The `auth.json` keys mirror the `KnownProvider` IDs verbatim (one entry per provider). Documentation table at `packages/coding-agent/docs/providers.md:48-73`.
+The single source of truth for env-var → provider mapping is the `envMap` in `getApiKeyEnvVars` (`packages/ai/src/env-api-keys.ts:79-117`). The `auth.json` keys mirror the `KnownProvider` IDs verbatim (one entry per provider). Documentation table at `packages/coding-agent/docs/providers.md:33-66`.
 
 | Provider ID (`auth.json` key) | Auth flavor | Primary env var(s) | Default model (HEAD) | Notes |
 |---|---|---|---|---|
@@ -44,6 +44,7 @@ The single source of truth for env-var → provider mapping is the `envMap` in `
 | `openrouter` | API key | `OPENROUTER_API_KEY` | `moonshotai/kimi-k2.6` | |
 | `vercel-ai-gateway` | API key | `AI_GATEWAY_API_KEY` | `zai/glm-5.1` | |
 | `zai` | API key | `ZAI_API_KEY` | `glm-5.1` | |
+| `meta` | OAuth (`/login meta`, auto-refreshes a Model API key) or API key | `META_API_KEY` (`packages/ai/src/env-api-keys.ts:110`) | `muse-spark-1.3` (`packages/coding-agent/src/core/model-resolver.ts:52`) | **Added v0.86.1** (#9096). Meta Muse subscription; `openai-responses` API at `https://api.meta.ai/v1` (`packages/ai/src/providers/meta.ts`). The model catalog is in the gitignored `providers/data/meta.json` — read the npm tarball, not the tree. |
 | `mistral` | API key | `MISTRAL_API_KEY` | `devstral-medium-latest` | |
 | `minimax` | API key | `MINIMAX_API_KEY` | `MiniMax-M2.7` | |
 | `minimax-cn` | API key | `MINIMAX_CN_API_KEY` | `MiniMax-M2.7` | China endpoint variant. |
@@ -55,12 +56,12 @@ The single source of truth for env-var → provider mapping is the `envMap` in `
 | `opencode-go` | API key | `OPENCODE_API_KEY` | `kimi-k2.6` | OpenCode Go. |
 | `kimi-coding` | API key | `KIMI_API_KEY` | `kimi-for-coding` | |
 | `cloudflare-workers-ai` | API key + account | `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID` | `@cf/moonshotai/kimi-k2.6` | Auto-sets `x-session-affinity` for prefix-cache discounts. |
-| `cloudflare-ai-gateway` | API key + account + gateway | `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID` | `workers-ai/@cf/moonshotai/kimi-k2.6` | Routes to OpenAI / Anthropic / Workers AI through one gateway. Auth modes: Workers-AI native, unified billing, stored BYOK, inline BYOK (`docs/providers.md:161-187`). |
-| `xiaomi` | API key | `XIAOMI_API_KEY` | `mimo-v2.5-pro` | **Added v0.72.0.** Xiaomi MiMo Token Plan (Anthropic-compatible endpoint). `/login` display name comes from the provider definition `name` field (`packages/ai/src/providers/xiaomi.ts:9`; `provider-display-names.ts` was removed in v0.80.8). User-facing doc: `docs/providers.md:73-92`. |
+| `cloudflare-ai-gateway` | API key + account + gateway | `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GATEWAY_ID` | `workers-ai/@cf/moonshotai/kimi-k2.6` | Routes to OpenAI / Anthropic / Workers AI through one gateway. Auth modes: Workers-AI native, unified billing, stored BYOK, inline BYOK. User-facing doc since 0.87.x: `docs/providers.md:140-152` (the auth-mode prose is now one paragraph at `:152` — unified billing, gateway-stored credentials, or an `Authorization` header in `models.json`). |
+| `xiaomi` | API key | `XIAOMI_API_KEY` | `mimo-v2.5-pro` | **Added v0.72.0.** Xiaomi MiMo Token Plan (Anthropic-compatible endpoint). `/login` display name comes from the provider definition `name` field (`packages/ai/src/providers/xiaomi.ts:9`; `provider-display-names.ts` was removed in v0.80.8). User-facing doc: the env-var table rows at `docs/providers.md:63-66` (the providers doc was rewritten in 0.86/0.87 and no longer has a per-provider Xiaomi section). |
 | `together` | API key | `TOGETHER_API_KEY` | `moonshotai/Kimi-K2.6` | Together AI. OpenAI-completions API at `https://api.together.ai/v1` (`providers/together.ts:8-13`). |
 | `nvidia` | API key | `NVIDIA_API_KEY` | `nvidia/nemotron-3-super-120b-a12b` | NVIDIA NIM / integrate.api.nvidia.com. |
 | `ant-ling` | API key | `ANT_LING_API_KEY` | `Ring-2.6-1T` | Ant Group Ling models. |
-| `radius` | **OAuth** | `RADIUS_API_KEY` | `auto` | Gateway provider — OAuth via `loadRadiusOAuth` (`providers/radius.ts:32`), routed through the gateway. Default model `auto` lets the gateway pick. |
+| `radius` | **OAuth** | `RADIUS_API_KEY` | `auto` | Gateway provider — OAuth via `loadRadiusOAuth` (`providers/radius.ts:38`), routed through the gateway. Default model `auto` lets the gateway pick. |
 | `zai-coding-cn` | API key | `ZAI_CODING_CN_API_KEY` | `glm-5.1` | Z.ai coding plan, CN region. Companion to `zai` / `zai-coding`. |
 | `qwen-token-plan` | API key | `QWEN_TOKEN_PLAN_API_KEY` | `qwen3.7-max` | Alibaba Qwen token plan. |
 | `qwen-token-plan-cn` | API key | `QWEN_TOKEN_PLAN_CN_API_KEY` | `qwen3.7-max` | CN region of the above. |
@@ -68,7 +69,7 @@ The single source of truth for env-var → provider mapping is the `envMap` in `
 | `xiaomi-token-plan-cn` | API key | `XIAOMI_TOKEN_PLAN_CN_API_KEY` | `mimo-v2.5-pro` | Xiaomi token plan, CN region. |
 | `xiaomi-token-plan-sgp` | API key | `XIAOMI_TOKEN_PLAN_SGP_API_KEY` | `mimo-v2.5-pro` | Xiaomi token plan, Singapore region. |
 
-Default-model map source: `packages/coding-agent/src/core/model-resolver.ts:20-62` (`defaultModelPerProvider`).
+Default-model map source: `packages/coding-agent/src/core/model-resolver.ts:20-63` (`defaultModelPerProvider`).
 
 A few extras visible in env-api-keys.ts but **not in the `KnownProvider` union** because they're test/auxiliary:
 
@@ -86,19 +87,19 @@ A few extras visible in env-api-keys.ts but **not in the `KnownProvider` union**
 
 ### `--model <pattern>` — single-target, glob-aware
 
-Resolved by `resolveCliModel` (`packages/coding-agent/src/core/model-resolver.ts:361-…`) which delegates to `resolveModelScope` for glob patterns (`:258-316`). Behavior:
+Resolved by `resolveCliModel` (`packages/coding-agent/src/core/model-resolver.ts:362-…`) which delegates to `resolveModelScope` for glob patterns (`:259-317`). Behavior:
 
-- **Exact match**: `--model claude-sonnet-4-5` or `--model anthropic/claude-sonnet-4-5`. Match goes through `findExactModelReferenceMatch` (`:76-…`).
+- **Exact match**: `--model claude-sonnet-4-5` or `--model anthropic/claude-sonnet-4-5`. Match goes through `findExactModelReferenceMatch` (`:77-…`).
 - **Provider-scoped**: `--model anthropic/claude-sonnet-4-5` filters to that provider only.
-- **Glob**: any pattern containing `*` / `?` / `[…]` triggers `minimatch`-based matching (`:259-275`):
+- **Glob**: any pattern containing `*` / `?` / `[…]` triggers `minimatch`-based matching (`:260-276`):
   - Case-insensitive.
-  - Pattern is matched against both the bare model `id` AND the `provider/id` form (`:364`).
+  - Pattern is matched against both the bare model `id` AND the `provider/id` form (`:365`).
   - Example: `--model "claude-*-sonnet-*"` resolves any matching Anthropic Sonnet variant.
-- **Thinking-level suffix**: append `:high` (or any `ThinkingLevel` from `packages/ai/src/types.ts`) to lock thinking. `model-resolver.ts:277` strips the suffix before glob-matching, then re-applies it.
+- **Thinking-level suffix**: append `:high` (or any `ThinkingLevel` from `packages/ai/src/types.ts`) to lock thinking. `model-resolver.ts:278` strips the suffix before glob-matching, then re-applies it.
 
 ### `--models <pattern,...>` — Ctrl+P cycle list
 
-Comma-separated list of patterns. Same glob semantics per pattern. Resolved by `resolveModelScope` at `model-resolver.ts:371-381` returning `ScopedModel[]` (`:51-54`). Stored on the session for cycling via `cycle_model` (RPC) or Ctrl+P (TUI).
+Comma-separated list of patterns. Same glob semantics per pattern. Resolved by `resolveModelScope` at `model-resolver.ts:372-382` returning `ScopedModel[]` (`:51-55`). Stored on the session for cycling via `cycle_model` (RPC) or Ctrl+P (TUI).
 
 ### `--api-key`
 

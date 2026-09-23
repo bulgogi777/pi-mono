@@ -1,6 +1,6 @@
 # Extension Loading
 
-Where pi looks for extensions and how each path becomes a loaded `Extension` object. All cites against pi-mono at the current pin (`v0.85.1`, `d981de12`). Two layers: the **discovery** function `discoverAndLoadExtensions` (`packages/coding-agent/src/core/extensions/loader.ts:756-804`) used in some flows, and the **resource-loader** path used in the default startup flow (`packages/coding-agent/src/core/resource-loader.ts:447-457`).
+Where pi looks for extensions and how each path becomes a loaded `Extension` object. All cites against pi-mono at the current pin (`v0.87.1`, `f07218c4`). Two layers: the **discovery** function `discoverAndLoadExtensions` (`packages/coding-agent/src/core/extensions/loader.ts:749-797`) used in some flows, and the **resource-loader** path used in the default startup flow (`packages/coding-agent/src/core/resource-loader.ts:447-457`).
 
 The discovery sources, regardless of which entry path runs:
 
@@ -10,7 +10,7 @@ The discovery sources, regardless of which entry path runs:
 
 The default startup goes through `resource-loader.ts` and the `package-manager.ts` settings layer, which builds the path list **including** npm package contributions; the directly-callable `discoverAndLoadExtensions` enumerates the project + global + configured paths in one call.
 
-## Project-first ordering (extensions/loader.ts:675-680)
+## Project-first ordering (extensions/loader.ts:668-673)
 
 In `discoverAndLoadExtensions`:
 
@@ -27,13 +27,13 @@ addPaths(discoverExtensionsInDir(globalExtDir));
 for (const p of configuredPaths) { ... }
 ```
 
-`CONFIG_DIR_NAME` is `.pi` (from `config.ts:398`). `agentDir` defaults to `~/.pi/agent/` (`config.ts:415-422`); override with `PI_CODING_AGENT_DIR`.
+`CONFIG_DIR_NAME` is `.pi` (from `src/config.ts:398`). `agentDir` defaults to `~/.pi/agent/` (`src/config.ts:415-422`); override with `PI_CODING_AGENT_DIR`.
 
-**Project-first** is the opposite of skills (where user/global wins). Dedup is by absolute path via the `seen` set at `extensions/loader.ts:645-652` — first occurrence wins, so if the same extension is listed in both project and global, the project version is loaded and the global one is silently skipped.
+**Project-first** is the opposite of skills (where user/global wins). Dedup is by absolute path via the `seen` set at `extensions/loader.ts:638-645` — first occurrence wins, so if the same extension is listed in both project and global, the project version is loaded and the global one is silently skipped.
 
 ## What counts as an "extension" inside a directory
 
-`discoverExtensionsInDir` at `extensions/loader.ts:604-635`. Three discovery rules per dir entry (documented at `:619-624`):
+`discoverExtensionsInDir` at `extensions/loader.ts:597-628`. Three discovery rules per dir entry (documented at `:612-617`):
 
 1. **Direct files**: `extensions/*.ts` or `*.js` → loaded.
 2. **Subdirectory with index**: `extensions/<name>/index.ts` or `index.js` → loaded.
@@ -41,11 +41,11 @@ for (const p of configuredPaths) { ... }
 
 No recursion beyond one level. Complex packages must use the `package.json` manifest.
 
-`isExtensionFile` at `extensions/loader.ts:587-589`: matches `*.ts` or `*.js`.
+`isExtensionFile` at `extensions/loader.ts:580-582`: matches `*.ts` or `*.js`.
 
-## The `pi.extensions` manifest (extensions/loader.ts:529-550)
+## The `pi.extensions` manifest (extensions/loader.ts:522-543)
 
-`resolveExtensionEntries` at `extensions/loader.ts:531`. For a subdirectory with `package.json`:
+`resolveExtensionEntries` at `extensions/loader.ts:524`. For a subdirectory with `package.json`:
 
 ```json
 {
@@ -58,35 +58,35 @@ No recursion beyond one level. Complex packages must use the `package.json` mani
 }
 ```
 
-The four arrays — `extensions`, `themes`, `skills`, `prompts` — are the contribution shape. Pi reads them via `readPiManifest` (`extensions/loader.ts:578-585`). Paths are resolved relative to the directory containing `package.json` (`extensions/loader.ts:591`); files that don't exist are silently dropped (`extensions/loader.ts:606`). If no `pi.extensions` entries resolve, `resolveExtensionEntries` falls back to `index.ts` / `index.js` (`extensions/loader.ts:618-626`).
+The four arrays — `extensions`, `themes`, `skills`, `prompts` — are the contribution shape. Pi reads them via `readPiManifest` (`extensions/loader.ts:571-578`). Paths are resolved relative to the directory containing `package.json` (`extensions/loader.ts:584`); files that don't exist are silently dropped (`extensions/loader.ts:599`). If no `pi.extensions` entries resolve, `resolveExtensionEntries` falls back to `index.ts` / `index.js` (`extensions/loader.ts:611-619`).
 
 ## npm packages — settings.json `packages` array
 
-The third source above ("explicitly configured paths") is in practice populated by the **package manager** layer, which reads `~/.pi/agent/settings.json` and `<cwd>/.pi/settings.json` for a `packages` array of npm package identifiers (or git URLs). For each entry, `package-manager.ts` (around `:909-916` for the project-first collision rule, and `:974-984` / `:1056-1064` for various enumeration paths) installs and walks the package's `pi.extensions` manifest, then surfaces the resolved file paths to the resource loader.
+The third source above ("explicitly configured paths") is in practice populated by the **package manager** layer, which reads `~/.pi/agent/settings.json` and `<cwd>/.pi/settings.json` for a `packages` array of npm package identifiers (or git URLs). For each entry, `package-manager.ts` (around `:913-920` for the project-first collision rule, and `:978-988` / `:1060-1068` for various enumeration paths) installs and walks the package's `pi.extensions` manifest, then surfaces the resolved file paths to the resource loader.
 
 The default flow at `resource-loader.ts:447-457` then calls `loadExtensions(extensionPaths, this.cwd, this.eventBus)` with the merged list — CLI-supplied paths plus the package-manager-resolved paths.
 
 ## Loose `extensions/` directory loads regardless of settings.json
 
-`<cwd>/.pi/extensions/*.ts` and `~/.pi/agent/extensions/*.ts` are scanned **regardless** of whether `settings.json` has a `packages` entry. The `packages` array adds npm-package contributions on top; it doesn't gate the loose directory scan. Source: the `discoverExtensionsInDir(localExtDir)` and `discoverExtensionsInDir(globalExtDir)` calls at `extensions/loader.ts:676-680` are unconditional.
+`<cwd>/.pi/extensions/*.ts` and `~/.pi/agent/extensions/*.ts` are scanned **regardless** of whether `settings.json` has a `packages` entry. The `packages` array adds npm-package contributions on top; it doesn't gate the loose directory scan. Source: the `discoverExtensionsInDir(localExtDir)` and `discoverExtensionsInDir(globalExtDir)` calls at `extensions/loader.ts:669-673` are unconditional.
 
 ## Inline factory loading
 
-For programmatic embedding, `loadExtensionFromFactory(factory, cwd, eventBus, runtime, extensionPath?)` at `extensions/loader.ts:489-521` lets a host program register an extension without going through the file system. Useful in SDK callers and tests. The synthetic path defaults to `"<inline>"` and shows up in source-info that way.
+For programmatic embedding, `loadExtensionFromFactory(factory, cwd, eventBus, runtime, extensionPath?)` at `extensions/loader.ts:480-514` lets a host program register an extension without going through the file system. Useful in SDK callers and tests. The synthetic path defaults to `"<inline>"` and shows up in source-info that way.
 
-## Loader internals — `loadExtension` (extensions/loader.ts:424-456)
+## Loader internals — `loadExtension` (extensions/loader.ts:415-447)
 
 For each path, `loadExtension`:
 
-1. `resolvePath(extensionPath, cwd)` — absolute-path normalization (`extensions/loader.ts:485`).
-2. `loadExtensionModule(extensionPath, cacheToken?)` (`extensions/loader.ts:488-510`; called at `:574`) — uses `jiti` to load TS/JS without a build step. In bun-binary mode it uses `virtualModules`; in Node/dev it uses path aliases via `getAliases()`.
-3. The module's default export must be a function (the factory) — anything else is rejected with `"Extension does not export a valid factory function"` (`extensions/loader.ts:487-489`).
-4. `createExtension(...)` builds an empty `Extension` object with `path`, `resolvedPath`, `sourceInfo`, and empty `Map`s for handlers / tools / message renderers / commands / flags / shortcuts (`extensions/loader.ts:387-463`).
+1. `resolvePath(extensionPath, cwd)` — absolute-path normalization (`extensions/loader.ts:476`).
+2. `loadExtensionModule(extensionPath, cacheToken?)` (`extensions/loader.ts:479-503`; called at `:567`) — uses `jiti` to load TS/JS without a build step. In bun-binary mode it uses `virtualModules`; in Node/dev it uses path aliases via `getAliases()`.
+3. The module's default export must be a function (the factory) — anything else is rejected with `"Extension does not export a valid factory function"` (`extensions/loader.ts:478-480`).
+4. `createExtension(...)` builds an empty `Extension` object with `path`, `resolvedPath`, `sourceInfo`, and empty `Map`s for handlers / tools / message renderers / commands / flags / shortcuts (`extensions/loader.ts:378-454`).
 5. `createExtensionAPI(extension, runtime, cwd, eventBus)` builds the `pi` object the factory will see (`loader.ts:~395`).
 6. `await factory(api)` — runs the extension's setup code.
 7. Returns `{ extension, error: null }` on success, `{ extension: null, error: "..." }` on failure.
 
-Errors are collected per-path into `LoadExtensionsResult.errors` (`extensions/loader.ts:532-535`); pi continues loading the rest.
+Errors are collected per-path into `LoadExtensionsResult.errors` (`extensions/loader.ts:525-528`); pi continues loading the rest.
 
 ## Override sources (resource-loader.ts:613-619, 631-650)
 
@@ -95,14 +95,14 @@ The resource loader knows that paths under `~/.pi/agent/extensions/` are scope `
 ## Common gotchas
 
 - **TypeScript imports**: handled by `jiti` — no separate compile step. But `jiti` won't help with native modules; if your extension depends on a native dep, you may need to bundle.
-- **Inline import dynamic gotcha**: extensions are loaded via `jiti.import(extensionPath, { default: true })` (`extensions/loader.ts:508`; the `createJiti` config is `:496-506`). Make sure your extension uses a default export (`export default function (pi) {...}`).
+- **Inline import dynamic gotcha**: extensions are loaded via `jiti.import(extensionPath, { default: true })` (`extensions/loader.ts:501`; the jiti instance is built at `:497-500` from `resolutionOptions` chosen at `:490-494`, with `createJiti` itself lazily imported from `jiti-loader.ts` or `jiti-static-loader.ts` at `:45-50`). Make sure your extension uses a default export (`export default function (pi) {...}`).
 - **Loose-directory loads always run**: there's no opt-out at the directory level. To selectively disable an extension, either delete/move its file, use `--no-extensions`, or the runtime extensions UI.
-- **Project shadowing**: a project extension with the same path as a global one wins (the global is dedup'd out at `extensions/loader.ts:645-652`). But a project extension and a global extension with **different file names** both load — there's no name-based dedup.
-- **`package.json` manifest paths**: silently filtered against `existsSync` (`extensions/loader.ts:606`). A typo in the manifest disappears with no warning. Verify with `ls`.
+- **Project shadowing**: a project extension with the same path as a global one wins (the global is dedup'd out at `extensions/loader.ts:638-645`). But a project extension and a global extension with **different file names** both load — there's no name-based dedup.
+- **`package.json` manifest paths**: silently filtered against `existsSync` (`extensions/loader.ts:599`). A typo in the manifest disappears with no warning. Verify with `ls`.
 
 ## Cross-references
 
 - Resource discovery for skills, prompts, themes, AGENTS.md / SYSTEM.md (the broader path-discovery picture): **pi-architecture** `reference/discovery-paths.md`.
 - The settings.json `packages` array and the npm-package contribution shape: **pi-architecture** (TBW `reference/packages-system.md`); fallback grep `packages/coding-agent/src/core/package-manager.ts`.
 - `--no-extensions` and other CLI flags: `packages/coding-agent/src/cli/args.ts`.
-- The `Extension` and `LoadExtensionsResult` types: `packages/coding-agent/src/core/extensions/types.ts:1781-1786`.
+- The `Extension` and `LoadExtensionsResult` types: `packages/coding-agent/src/core/extensions/types.ts:1909-1914`.

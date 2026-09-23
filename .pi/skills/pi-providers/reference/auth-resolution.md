@@ -1,24 +1,24 @@
 # Auth Resolution
 
-How pi resolves credentials for a given provider, what `~/.pi/agent/auth.json` contains, and the OAuth-vs-API-key billing distinction (especially for Anthropic). All cites against the current pin (`v0.85.1`, `d981de12`).
+How pi resolves credentials for a given provider, what `~/.pi/agent/auth.json` contains, and the OAuth-vs-API-key billing distinction (especially for Anthropic). All cites against the current pin (`v0.87.1`, `f07218c4`).
 
 ## The resolution order
 
 Re-derived 2026-07-26 against `v0.82.1`, re-anchored 2026-08-13 to `v0.84.1` (confidence: **high** — traced end-to-end through the live call path, not inferred). Replaces the pre-v0.80.8 `AuthStorage.getApiKey` description; that function was deleted by `9993c969` and `auth-storage.ts` is now credential **storage** only (`AuthStorage` at `core/auth-storage.ts:327` — `read` `:441`, `modify` `:449`, `delete` `:473`, `list` `:485`).
 
-**Call path:** `ModelRuntime.getAuth` (`model-runtime.ts:472-493`) → `Models.getAuth` (`packages/ai/src/models.ts`) → **`resolveProviderAuth`** (`packages/ai/src/auth/resolve.ts:46-77`) — *this is the authoritative resolver*. For providers configured via `models.json`/extensions, the provider's own `auth.apiKey` has been wrapped by `composeApiKeyAuth` (`provider-composer.ts:310`, resolve body `:350-371`), which inserts the configured key into the chain.
+**Call path:** `ModelRuntime.getAuth` (`model-runtime.ts:473-494`) → `Models.getAuth` (`packages/ai/src/models.ts`) → **`resolveProviderAuth`** (`packages/ai/src/auth/resolve.ts:46-77`) — *this is the authoritative resolver*. For providers configured via `models.json`/extensions, the provider's own `auth.apiKey` has been wrapped by `composeApiKeyAuth` (`provider-composer.ts:340`, resolve body `:380-401`), which inserts the configured key into the chain.
 
 | # | Source | Code | Notes |
 |---|---|---|---|
 | 1 | **Per-request override** (`options.apiKey`, `--api-key`) | `resolve.ts:54-60` | Short-circuits everything; builds a synthetic `api_key` credential from the override, carrying `overrides.env`. |
 | 2 | **Runtime in-memory key** (`pi.setApiKey` from extensions) | `runtime-credentials.ts:24-27` | `RuntimeCredentials` is a `CredentialStore` **overlay**: `read()` returns the in-memory override if present, else delegates to `AuthStorage`. So runtime keys enter as a "stored credential" ranked above `auth.json`. Process-lifetime only. |
 | 3 | **`auth.json` credential** | `resolve.ts:62-72` | `type: "oauth"` → `resolveStoredOAuth` (`:127`) with **double-checked locking**: valid tokens take no lock; expired ones lock, re-check expiry, refresh once globally, persist the rotation. `type: "api_key"` → `resolveApiKey` with `overrides.env` merged over the credential's own `env` (`:66`). |
-| 4 | **`models.json` / extension-configured `apiKey`** | `provider-composer.ts:358-363` | Expanded by `resolveConfigValueOrThrow` (`:360`) — `!shell-command`, `$ENV_VAR`, or literal. Reported as `source: "configured API key"`. |
+| 4 | **`models.json` / extension-configured `apiKey`** | `provider-composer.ts:388-393` | Expanded by `resolveConfigValueOrThrow` (`:390`) — `!shell-command`, `$ENV_VAR`, or literal. Reported as `source: "configured API key"`. |
 | 5 | **Ambient** (env vars, AWS profiles, ADC files) | `resolve.ts:106-109` → provider's own `apiKey.resolve` | Reached only when there is **no** stored credential. Per-provider env names via `getApiKeyEnvVars`; for `anthropic` the order is `ANTHROPIC_AUTH_TOKEN` → `ANTHROPIC_OAUTH_TOKEN` → `ANTHROPIC_API_KEY` (`packages/ai/src/env-api-keys.ts:76`). |
 
 ### Two corrections vs. the pre-v0.80.8 description
 
-1. **`models.json` outranks environment variables** — they were listed the other way round (env at #4, models.json as a last-resort "fallback" at #5). In `composeApiKeyAuth`, a configured `rawKey` is consumed *before* delegating to `inherited` (the built-in provider's env-var resolution): configured-key branch `:358-363`, env branch `:364-365`. The old `options.includeFallback` flag no longer exists.
+1. **`models.json` outranks environment variables** — they were listed the other way round (env at #4, models.json as a last-resort "fallback" at #5). In `composeApiKeyAuth`, a configured `rawKey` is consumed *before* delegating to `inherited` (the built-in provider's env-var resolution): configured-key branch `:388-393`, env branch `:394-395`. The old `options.includeFallback` flag no longer exists.
 
 2. **A stored credential SHORT-CIRCUITS — it never falls through to env.** `resolve.ts:62-72`: if `credentials.read()` returns anything, that branch decides the outcome, and if the stored type has no matching provider method the function **`return undefined` (`:103`)** rather than trying ambient auth. Practical consequence: a stale or wrong-type entry in `auth.json` makes the provider look *unconfigured* even when a perfectly good `ANTHROPIC_API_KEY` is exported. When debugging "pi says the provider isn't configured but my env var is set", check `auth.json` **first** — deleting the entry (or `/logout`) is what restores env-var resolution.
 
@@ -78,16 +78,16 @@ OAuth tokens are populated by the `/login` flow per provider. `/logout` clears t
 
 ### `/login` is interactive — three branches
 
-`handleLoginCommand(providerRef?)` (`interactive-mode.ts:5479-5500`). It is **not** a "you must name a provider" command:
+`handleLoginCommand(providerRef?)` (`interactive-mode.ts:5685-5706`). It is **not** a "you must name a provider" command:
 
 | Invocation | Behavior | Code |
 |---|---|---|
-| `/login` (no argument) | Opens the **auth-type selector** — pick provider + auth flavor from a list. This is the normal path. | `:5480-5483` |
-| `/login <ref>` matching exactly one provider+authType | Goes straight into that login (`startProviderLogin`; OAuth branch at `:5503`). | `:5486-5488` |
-| `/login <ref>` matching several entries that are all the **same** provider id | Opens the auth-type selector scoped to that provider — i.e. "which auth flavor for this provider". | `:5491-5496` |
-| `/login <ref>` matching several **different** providers, or nothing | Falls through to `showLoginProviderSelector(undefined, providerRef)` with the ref as a filter. | `:5499` |
+| `/login` (no argument) | Opens the **auth-type selector** — pick provider + auth flavor from a list. This is the normal path. | `:5686-5689` |
+| `/login <ref>` matching exactly one provider+authType | Goes straight into that login (`startProviderLogin`; OAuth branch at `:5709`). | `:5692-5694` |
+| `/login <ref>` matching several entries that are all the **same** provider id | Opens the auth-type selector scoped to that provider — i.e. "which auth flavor for this provider". | `:5697-5702` |
+| `/login <ref>` matching several **different** providers, or nothing | Falls through to `showLoginProviderSelector(undefined, providerRef)` with the ref as a filter. | `:5705` |
 
-`findLoginProviderOptions(providerRef)` (`:5485`) is what produces the candidate list, and `modelRuntime.getAvailable()` is awaited first (`:5151`) so the selector reflects the live registry.
+`findLoginProviderOptions(providerRef)` (`:5691`) is what produces the candidate list, and `modelRuntime.getAvailable()` is awaited first (`:5344`) so the selector reflects the live registry.
 
 ## What changed in the Anthropic auth path, 0.84.2 → 0.85.1
 
@@ -95,7 +95,7 @@ OAuth tokens are populated by the `/login` flow per provider. `/logout` clears t
 
 ### 1. The impersonated Claude Code version was bumped
 
-`claudeCodeVersion` (`anthropic-messages.ts:81`) went **`2.1.75` → `2.1.251`**. It is sent as `user-agent: claude-cli/${claudeCodeVersion}` alongside `x-app: cli` (`:943-944`) on the OAuth branch only. This string is part of what makes subscription auth work; it is not cosmetic. **A stale pin means a stale impersonated version**, which is one more reason not to let the pin drift — if Anthropic ever gates on a minimum, the tree would not tell you.
+`claudeCodeVersion` (`anthropic-messages.ts:87`) went **`2.1.75` → `2.1.251`** (0.85.x) → **`2.1.280`** (0.87.1, "Fixed inherited Anthropic OAuth requests reporting an outdated Claude Code version"). It is sent as `user-agent: claude-cli/${claudeCodeVersion}` alongside `x-app: cli` (`:952-953`) on the OAuth branch only. This string is part of what makes subscription auth work; it is not cosmetic. **A stale pin means a stale impersonated version**, which is one more reason not to let the pin drift — if Anthropic ever gates on a minimum, the tree would not tell you.
 
 ### 2. Header and beta assembly were extracted — and both are now OVERRIDABLE by design
 
@@ -103,12 +103,12 @@ Two new helpers replace what used to be inline construction:
 
 | Helper | Cite | What it does |
 |---|---|---|
-| `mergeClientHeaders(...sources)` | `:288-290` | Seeds `User-Agent: getPiUserAgent()`, then merges each source left-to-right. **Later sources win.** |
-| `getBetaFeatures(...)` | ends `:1017` | Computes the `anthropic-beta` list, including the OAuth pair at `:1003`. |
+| `mergeClientHeaders(...sources)` | `:294-296` | Seeds `User-Agent: getPiUserAgent()`, then merges each source left-to-right. **Later sources win.** |
+| `getBetaFeatures(...)` | ends `:1032` | Computes the `anthropic-beta` list, including the OAuth pair at `:1017`. |
 
-> ⚠ **An explicit `anthropic-beta` header REPLACES the computed betas outright — including `claude-code-20250219,oauth-2025-04-20`.** `getBetaFeatures` scans `model.headers` then `options.headers`; if either sets `anthropic-beta`, that value is used verbatim and **none** of the computed features are added (`:985-1000`). Setting it to `null` returns `[]` — no betas at all.
+> ⚠ **An explicit `anthropic-beta` header REPLACES the computed betas outright — including `claude-code-20250219,oauth-2025-04-20`.** `getBetaFeatures` scans `model.headers` then `options.headers`; if either sets `anthropic-beta`, that value is used verbatim and **none** of the computed features are added (`:999-1014`). Setting it to `null` returns `[]` — no betas at all.
 >
-> This is **intended, tested behavior**, not a bug: `packages/ai/test/anthropic-auth-token.test.ts` asserts "preserves explicit Anthropic beta header replacement" (`:218`) and "preserves explicit Anthropic beta header suppression" (`:227`). The same file asserts the User-Agent is overridable (`:208`).
+> This is **intended, tested behavior**, not a bug: `packages/ai/test/anthropic-auth-token.test.ts` asserts "preserves explicit Anthropic beta header replacement" (`:224`) and "preserves explicit Anthropic beta header suppression" (`:233`). The same file asserts the User-Agent is overridable (`:209`).
 >
 > **Consequence for APEX:** any consumer that sets a custom `anthropic-beta` or `user-agent` on an Anthropic model config would silently strip the OAuth identity and **move billing off the Max subscription onto the per-token extra-usage pool.** Nothing errors; the call succeeds and costs money. We do not set either header today (checked 2026-09-06), so this is a latent hazard, not an active one — but it is exactly the shape that gate 2 (`cacheWrite > 0` on a live call) exists to catch, and it is why gate 2 must stay a *live probe* rather than a grep.
 
@@ -127,13 +127,13 @@ Every `auth.json` read now passes through `stripBom()` (`auth-storage.ts` — `R
 
 ### 5. Not an auth change, but adjacent: `models.json` default resolution
 
-`provider-composer.ts` added `findModelDefaults()` (`:168-176`). When a `models.json` entry defines a model, the defaults it inherits are now resolved by **id → same `api` → `openai-completions` → first model**, where previously an unmatched id silently inherited `models[0]`. If you define a custom model against a provider, it now inherits from a sibling that shares its API rather than from whatever happened to be first.
+`provider-composer.ts` added `findModelDefaults()` (`:174-182`). When a `models.json` entry defines a model, the defaults it inherits are now resolved by **id → same `api` → `openai-completions` → first model**, where previously an unmatched id silently inherited `models[0]`. If you define a custom model against a provider, it now inherits from a sibling that shares its API rather than from whatever happened to be first.
 
 ## Anthropic OAuth detection — `sk-ant-oat`
 
 The Anthropic OAuth path is the source of two recurring questions: "is pi using my OAuth or API key?" and "why does pi say I'm out of credits when I have a Max sub?" Both reduce to one detail.
 
-**OAuth-token prefix detection**: `interactive-mode.ts:256-258`:
+**OAuth-token prefix detection**: `interactive-mode.ts:294-296`:
 
 ```typescript
 function isAnthropicSubscriptionAuthKey(apiKey: string | undefined): boolean {
@@ -141,11 +141,11 @@ function isAnthropicSubscriptionAuthKey(apiKey: string | undefined): boolean {
 }
 ```
 
-The `sk-ant-oat` prefix means "Anthropic OAuth Access Token" — i.e. the credential is from `/login` against `claude.ai`, not from the API console. When this returns true, pi shows the warning constant `ANTHROPIC_SUBSCRIPTION_AUTH_WARNING` at `interactive-mode.ts:253-254` (emission helper `maybeWarnAboutAnthropicSubscriptionAuth` at `:4908`, `showWarning(...)` calls at `:4924` and `:4932`; six invocation sites at `:1108`, `:4202`, `:4853`, `:4999`, `:5715`, `:5722`):
+The `sk-ant-oat` prefix means "Anthropic OAuth Access Token" — i.e. the credential is from `/login` against `claude.ai`, not from the API console. When this returns true, pi shows the warning constant `ANTHROPIC_SUBSCRIPTION_AUTH_WARNING` at `interactive-mode.ts:291-292` (emission helper `maybeWarnAboutAnthropicSubscriptionAuth` at `:5101`, `showWarning(...)` calls at `:5117` and `:5125`; six invocation sites at `:1161`, `:4390`, `:5046`, `:5192`, `:5933`, `:5940`):
 
 > "Anthropic subscription auth is active. Third-party harness usage draws from extra usage and is billed per token, not your Claude plan limits. Manage extra usage at https://claude.ai/settings/usage. Disable this warning in /settings."
 
-> **Cite correction, 2026-09-06.** This page previously cited the warning constant at `interactive-mode.ts:206-208` and the helper at `:4609` / `:4625` / `:4635`. **Those were wrong at `v0.84.1` as well as now** — line 206 at `v0.84.1` held `type RenderSessionItem = ...`, not the warning. So this was an *error*, not drift, and it survived both the `v0.84.1` and `v0.85.1` mechanical re-anchor passes untouched (a drift pass maps where a line *went*; it cannot notice a cite that never pointed anywhere right). Values above re-read at `v0.85.1`. The warning **text also changed** in this range, gaining the trailing "Disable this warning in /settings." — which is why no content matcher could have relocated it either.
+> **Cite correction, 2026-09-06.** This page previously cited the warning constant at `interactive-mode.ts:223-225` and the helper at `:4798` / `:4814` / `:4824`. **Those were wrong at `v0.84.1` as well as now** — line 206 at `v0.84.1` held `type RenderSessionItem = ...`, not the warning. So this was an *error*, not drift, and it survived both the `v0.84.1` and `v0.85.1` mechanical re-anchor passes untouched (a drift pass maps where a line *went*; it cannot notice a cite that never pointed anywhere right). Values above re-read at `v0.85.1`. The warning **text also changed** in this range, gaining the trailing "Disable this warning in /settings." — which is why no content matcher could have relocated it either.
 
 This is the canonical statement of the billing model: **OAuth-from-Claude-Pro/Max → extra-usage pool → per-token billing**. The Pro/Max plan limit (e.g. "5x messages every 5 hours") covers usage **inside the Claude.ai web app**, not OAuth API traffic from third-party harnesses like pi.
 
@@ -177,7 +177,7 @@ Recovery options:
 
 ### "Why does pi say I'm out of Anthropic credits when I have a Max sub?"
 
-You're hitting the third-party-app extra-usage cap, not your Pro/Max plan. The warning at `interactive-mode.ts:206-208` says exactly this: subscription auth bills from extra usage, billed per token, not against your Pro/Max plan limits. Visit https://claude.ai/settings/usage to see the pool state. To bypass, switch to `ANTHROPIC_API_KEY`-based auth (and clear or shadow `ANTHROPIC_OAUTH_TOKEN`).
+You're hitting the third-party-app extra-usage cap, not your Pro/Max plan. The warning at `interactive-mode.ts:223-225` says exactly this: subscription auth bills from extra usage, billed per token, not against your Pro/Max plan limits. Visit https://claude.ai/settings/usage to see the pool state. To bypass, switch to `ANTHROPIC_API_KEY`-based auth (and clear or shadow `ANTHROPIC_OAUTH_TOKEN`).
 
 ### "Why does my `--api-key` flag not seem to take effect?"
 
@@ -190,7 +190,7 @@ Use the shell-command form: `{ "type": "api_key", "key": "!op read 'op://vault/i
 ## Cross-references
 
 - The actual Anthropic OAuth flow (PKCE, `claude.ai`-hosted authorization) lives in `packages/ai/src/auth/oauth/anthropic.ts` (relocated from `packages/ai/src/utils/oauth/anthropic.ts` in the 0.80.x re-architecture) — outside this skill's primary territory but cited here for completeness.
-- The `anthropic-beta` headers `claude-code-20250219,oauth-2025-04-20` set on OAuth requests (`api/anthropic-messages.ts:902`) interact with prompt caching — see **pi-prompt-assembly** `reference/cache-breakpoints.md` (the OAuth identity preamble is breakpoint #1a there). Note: in the 0.80.x AI-package re-architecture the streaming/OAuth logic moved from `packages/ai/src/providers/anthropic.ts` (now a 59-line provider shell) to `packages/ai/src/api/anthropic-messages.ts`.
+- The `anthropic-beta` headers `claude-code-20250219,oauth-2025-04-20` set on OAuth requests (`api/anthropic-messages.ts:911`) interact with prompt caching — see **pi-prompt-assembly** `reference/cache-breakpoints.md` (the OAuth identity preamble is breakpoint #1a there). Note: in the 0.80.x AI-package re-architecture the streaming/OAuth logic moved from `packages/ai/src/providers/anthropic.ts` (now a 59-line provider shell) to `packages/ai/src/api/anthropic-messages.ts`.
 - Per-provider env vars and `auth.json` keys: see `reference/built-in-providers.md`.
 - Custom-provider auth (extensions registering their own OAuth flows): `pi.registerProvider` documented in `packages/coding-agent/docs/custom-provider.md`.
-- The global `httpProxy` setting in `~/.pi/agent/settings.json` (0.79.5) and per-credential `env: {}` overrides both compose with the auth-resolution path — see `settings-manager.ts:133` for the setting and `http-dispatcher.ts:44-47` for `applyHttpProxySettings` (sets `process.env.HTTP_PROXY` and `HTTPS_PROXY` via `??=`, so pre-existing process-env values still win).
+- The global `httpProxy` setting in `~/.pi/agent/settings.json` (0.79.5) and per-credential `env: {}` overrides both compose with the auth-resolution path — see `settings-manager.ts:149` for the setting and `http-dispatcher.ts:44-47` for `applyHttpProxySettings` (sets `process.env.HTTP_PROXY` and `HTTPS_PROXY` via `??=`, so pre-existing process-env values still win).

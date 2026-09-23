@@ -2,7 +2,7 @@
 
 When pi runs in `--mode rpc`, extensions still call methods on `ctx.ui` (`select`, `confirm`, `input`, `editor`, `notify`, `setStatus`, `setWidget`, `setTitle`, `setEditorText`, …). There is no TUI to render them. The RPC dispatcher fakes the UI by emitting `extension_ui_request` lines on stdout and, for awaitable methods only, waiting for matching `extension_ui_response` lines on stdin. This file is the canonical reference for which methods need a host reply and which don't, including the timeout-and-default semantics that determine "why does my extension hang in RPC mode."
 
-All cites against `packages/coding-agent/src/modes/rpc/rpc-mode.ts` at the current pin (`v0.85.1`, `d981de12`). Wire types live in `rpc-types.ts:198-235` (request union) and `:233-236` (response union). Documented at `packages/coding-agent/docs/rpc.md:1048-1247`.
+All cites against `packages/coding-agent/src/modes/rpc/rpc-mode.ts` at the current pin (`v0.87.1`, `f07218c4`; `rpc-mode.ts` changed by only 2 lines across 0.85.1 → 0.87.1). Wire types live in `rpc-types.ts:246-281` (`RpcExtensionUIRequest` union) and `:288-291` (`RpcExtensionUIResponse` union); `rpc-types.ts` is byte-identical across 0.85.1 → 0.87.1 — so the previous cite here (`:198-235` / `:233-236`) was already wrong at `v0.85.1`, not drift; corrected 2026-09-22. Documented in `packages/coding-agent/docs/rpc-extension-ui.md` — **split out of `docs/rpc.md` in 0.86/0.87**, which is now an index over `rpc-commands.md`, `rpc-extension-ui.md` and `json.md`.
 
 ## The two halves
 
@@ -78,7 +78,7 @@ The `parseResponse` callback in `createDialogPromise` translates these into the 
 
 ## Hang-debugging checklist
 
-> **First, on 0.85.x+: make the wait observable instead of inferring it.** The `ui_prompt_start` / `ui_prompt_end` hook events (added 0.85.x, `extensions/types.ts:748-761`, emitted from `runner.ts:453-486`) announce exactly when pi begins and stops blocking on a user-facing extension UI prompt, carrying `kind` (`select` / `confirm` / `input` / `editor` / `custom`) and an optional `title`. **A `ui_prompt_start` with no matching `ui_prompt_end` localises the hang to a specific prompt** and tells you which method to look for below — turning items 2-5 from guesswork into a lookup. Register a tiny logging extension for these two events when diagnosing.
+> **First, on 0.85.x+: make the wait observable instead of inferring it.** The `ui_prompt_start` / `ui_prompt_end` hook events (added 0.85.x, `extensions/types.ts:830-843`, emitted from `runner.ts:539-572`) announce exactly when pi begins and stops blocking on a user-facing extension UI prompt, carrying `kind` (`select` / `confirm` / `input` / `editor` / `custom`) and an optional `title`. **A `ui_prompt_start` with no matching `ui_prompt_end` localises the hang to a specific prompt** and tells you which method to look for below — turning items 2-5 from guesswork into a lookup. Register a tiny logging extension for these two events when diagnosing.
 >
 > Three caveats before you build on them: they are **outermost-only** (depth-tracked — nested `ctx.ui` calls emit ONE pair), they are **balanced even when the prompt throws**, and they are **fire-and-forget** (`queueMicrotask`, return value discarded) so they can observe a hang but never prevent or answer one. Full semantics: **pi-extensions** `reference/hook-events.md` § UI / user input.
 

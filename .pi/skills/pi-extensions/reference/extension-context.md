@@ -1,46 +1,46 @@
 # ExtensionContext
 
-The second argument passed to every hook handler and to many command/shortcut handlers. Carries cwd, the active session, the model registry, abort plumbing, and the UI bridge. All cites against `packages/coding-agent/src/core/extensions/types.ts` at the current pin (`v0.85.1`, `d981de12`).
+The second argument passed to every hook handler and to many command/shortcut handlers. Carries cwd, the active session, the model registry, abort plumbing, and the UI bridge. All cites against `packages/coding-agent/src/core/extensions/types.ts` at the current pin (`v0.87.1`, `f07218c4`).
 
-The base interface is `ExtensionContext` at `extensions/types.ts:304-340`. Slash-command handlers receive the extended `ExtensionCommandContext` (`extensions/types.ts:355-389`); session-replacement callbacks receive `ReplacedSessionContext` (`extensions/types.ts:396-406`). This file documents the base interface; the extensions are summarized at the end.
+The base interface is `ExtensionContext` at `extensions/types.ts:308-344`. Slash-command handlers receive the extended `ExtensionCommandContext` (`extensions/types.ts:359-393`); session-replacement callbacks receive `ReplacedSessionContext` (`extensions/types.ts:400-410`). This file documents the base interface; the extensions are summarized at the end.
 
 ## Members of `ExtensionContext`
 
 | Member | Type | Lines | Notes |
 |---|---|---|---|
-| `ui` | `ExtensionUIContext` | `:303` | Always present. In `--mode rpc` it's bridged via `extension_ui_request` / `extension_ui_response` (see `reference/ui-context.md`). In `--mode json` and other UI-less modes the dialog methods may resolve to defaults rather than blocking — check `hasUI` first if your code path actually needs an interactive answer. |
-| `hasUI` | `boolean` | `:305` | The honest gate. `false` in print/JSON mode (no rendering, no input). **`true` in RPC mode** (the bridge counts as UI), so `hasUI` does not by itself tell you whether you're interactive vs RPC. Test for `process.argv` containing `--mode rpc` if you need that distinction. |
-| `cwd` | `string` | `:307` | Working directory the agent is running in. Read-only; reflects the value passed to `loadExtensions` (`extensions/loader.ts:646`). |
-| `sessionManager` | `ReadonlySessionManager` | `:362` | Read-only view (`extensions/types.ts:191-225`) over the active `SessionManager`. Use `sessionManager.getEntries()`, `getLeafId()`, `getEntry(id)`, `getBranch()`, `getTree()`, `getHeader()`, `getLabel(id)` for inspection. To **mutate** session state, use `pi.setLabel`, `pi.setSessionName`, `pi.appendEntry`, or the command-context methods (`fork`, `newSession`, `navigateTree`). The full API is in **pi-sessions**. |
-| `modelRegistry` | `ModelRegistry` | `:311` | The registry pi uses for model lookups and API-key resolution. Mostly used by `pi.registerProvider` plumbing; extensions rarely touch it directly. |
-| `model` | `Model<any> \| undefined` | `:313` | The currently selected model. `undefined` before any model is selected (very early in startup, or if the user hasn't `/login`'d to any provider). Mutate via `pi.setModel(model)`. |
-| `isIdle()` | `() => boolean` | `:315` | True when the agent isn't streaming. Inverse of `isStreaming` in `RpcSessionState`. |
-| `signal` | `AbortSignal \| undefined` | `:317` | The current agent's abort signal. **`undefined` when the agent isn't streaming**, so guard with `isIdle()` or `if (ctx.signal)`. Wire long-running extension work to it: `await fetch(url, { signal: ctx.signal })`. |
-| `abort()` | `() => void` | `:319` | Aborts the active agent operation (no-op if idle). Equivalent to the RPC `abort` command. |
-| `hasPendingMessages()` | `() => boolean` | `:321` | True when steering / follow-up queues are non-empty. |
-| `shutdown()` | `() => void` | `:323` | Graceful pi exit. Available in **all** contexts (interactive, RPC, JSON). Used e.g. by `examples/extensions/shutdown-command.ts`. |
-| `getContextUsage()` | `() => ContextUsage \| undefined` | `:330` | Returns `{ tokens, max }`-style estimates (`ContextUsage` at `extensions/types.ts:290-300`). Right after compaction (before next assistant message), `tokens` may be `null` — handle accordingly. |
-| `compact(options?)` | `(options?: CompactOptions) => void` | `:332` | Triggers compaction without awaiting. Optional `customInstructions`. See **pi-sessions** for the compaction flow. |
-| `getSystemPrompt()` | `() => string` | `:334` | Returns the **effective** system prompt assembled by `buildSystemPrompt`. Useful for status widgets that surface prompt size. See `examples/extensions/system-prompt-header.ts`. Per-turn `BeforeAgentStartEvent` carries the same string in `event.systemPrompt`. |
+| `ui` | `ExtensionUIContext` | `:307` | Always present. In `--mode rpc` it's bridged via `extension_ui_request` / `extension_ui_response` (see `reference/ui-context.md`). In `--mode json` and other UI-less modes the dialog methods may resolve to defaults rather than blocking — check `hasUI` first if your code path actually needs an interactive answer. |
+| `hasUI` | `boolean` | `:309` | The honest gate. `false` in print/JSON mode (no rendering, no input). **`true` in RPC mode** (the bridge counts as UI), so `hasUI` does not by itself tell you whether you're interactive vs RPC. Test for `process.argv` containing `--mode rpc` if you need that distinction. |
+| `cwd` | `string` | `:311` | Working directory the agent is running in. Read-only; reflects the value passed to `loadExtensions` (`extensions/loader.ts:639`). |
+| `sessionManager` | `ReadonlySessionManager` | `:353` | Read-only view (`extensions/types.ts:195-229`) over the active `SessionManager`. Use `sessionManager.getEntries()`, `getLeafId()`, `getEntry(id)`, `getBranch()`, `getTree()`, `getHeader()`, `getLabel(id)` for inspection. To **mutate** session state, use `pi.setLabel`, `pi.setSessionName`, `pi.appendEntry`, or the command-context methods (`fork`, `newSession`, `navigateTree`). The full API is in **pi-sessions**. |
+| `modelRegistry` | `ModelRegistry` | `:315` | The registry pi uses for model lookups and API-key resolution. Mostly used by `pi.registerProvider` plumbing; extensions rarely touch it directly. |
+| `model` | `Model<any> \| undefined` | `:317` | The currently selected model. `undefined` before any model is selected (very early in startup, or if the user hasn't `/login`'d to any provider). Mutate via `pi.setModel(model)`. |
+| `isIdle()` | `() => boolean` | `:319` | True when the agent isn't streaming. Inverse of `isStreaming` in `RpcSessionState`. |
+| `signal` | `AbortSignal \| undefined` | `:321` | The current agent's abort signal. **`undefined` when the agent isn't streaming**, so guard with `isIdle()` or `if (ctx.signal)`. Wire long-running extension work to it: `await fetch(url, { signal: ctx.signal })`. |
+| `abort()` | `() => void` | `:323` | Aborts the active agent operation (no-op if idle). Equivalent to the RPC `abort` command. |
+| `hasPendingMessages()` | `() => boolean` | `:325` | True when steering / follow-up queues are non-empty. |
+| `shutdown()` | `() => void` | `:327` | Graceful pi exit. Available in **all** contexts (interactive, RPC, JSON). Used e.g. by `examples/extensions/shutdown-command.ts`. |
+| `getContextUsage()` | `() => ContextUsage \| undefined` | `:334` | Returns `{ tokens, max }`-style estimates (`ContextUsage` at `extensions/types.ts:294-304`). Right after compaction (before next assistant message), `tokens` may be `null` — handle accordingly. |
+| `compact(options?)` | `(options?: CompactOptions) => void` | `:336` | Triggers compaction without awaiting. Optional `customInstructions`. See **pi-sessions** for the compaction flow. |
+| `getSystemPrompt()` | `() => string` | `:338` | Returns the **effective** system prompt assembled by `buildSystemPrompt`. Useful for status widgets that surface prompt size. See `examples/extensions/system-prompt-header.ts`. Per-turn `BeforeAgentStartEvent` carries the same string in `event.systemPrompt`. |
 
 ## ExtensionCommandContext (slash command handlers)
 
-`extensions/types.ts:346-381` extends `ExtensionContext` with five session-mutating methods that are only safe under user-initiated commands:
+`extensions/types.ts:350-385` extends `ExtensionContext` with five session-mutating methods that are only safe under user-initiated commands:
 
 | Method | Lines | Purpose |
 |---|---|---|
-| `waitForIdle()` | `:344` | `await` the agent stopping. |
-| `newSession(options?)` | `:346-350` | Cancellable via `session_before_switch` hook. `options.setup` runs against the new `SessionManager` before any messages; `options.withSession` runs against the bound `ReplacedSessionContext`. |
-| `fork(entryId, options?)` | `:352-355` | Cancellable via `session_before_fork`. Creates a new file (in-place branch is `pi.setLabel`-style territory; see pi-sessions for `branch()` vs `forkFrom()`). |
-| `navigateTree(targetId, options?)` | `:357-360` | Cancellable via `session_before_tree`. Optional `summarize` writes a `BranchSummaryEntry`. |
-| `switchSession(sessionPath, options?)` | `:362-365` | Cancellable via `session_before_switch`. |
-| `reload()` | `:375` | Re-runs extension/skill/prompt/theme discovery. Triggers `session_shutdown` then `session_start` with `reason: "reload"`. |
+| `waitForIdle()` | `:348` | `await` the agent stopping. |
+| `newSession(options?)` | `:350-354` | Cancellable via `session_before_switch` hook. `options.setup` runs against the new `SessionManager` before any messages; `options.withSession` runs against the bound `ReplacedSessionContext`. |
+| `fork(entryId, options?)` | `:356-359` | Cancellable via `session_before_fork`. Creates a new file (in-place branch is `pi.setLabel`-style territory; see pi-sessions for `branch()` vs `forkFrom()`). |
+| `navigateTree(targetId, options?)` | `:361-364` | Cancellable via `session_before_tree`. Optional `summarize` writes a `BranchSummaryEntry`. |
+| `switchSession(sessionPath, options?)` | `:366-369` | Cancellable via `session_before_switch`. |
+| `reload()` | `:379` | Re-runs extension/skill/prompt/theme discovery. Triggers `session_shutdown` then `session_start` with `reason: "reload"`. |
 
 Each cancellable method returns `{ cancelled: boolean }` so the caller can distinguish "extension vetoed" from "operation completed."
 
 ## ReplacedSessionContext (withSession callbacks)
 
-`extensions/types.ts:384-398` extends `ExtensionCommandContext` with two messaging methods bound to the **new** session created by `newSession` / `fork` / `switchSession`:
+`extensions/types.ts:388-402` extends `ExtensionCommandContext` with two messaging methods bound to the **new** session created by `newSession` / `fork` / `switchSession`:
 
 - `sendMessage(message, options?)` — inject a `CustomMessage` into the replacement session.
 - `sendUserMessage(content, options?)` — inject a user message into the replacement session.

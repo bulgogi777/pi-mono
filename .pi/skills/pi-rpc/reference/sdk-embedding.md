@@ -1,6 +1,6 @@
 # SDK Embedding — `AgentSession` vs `RpcClient`
 
-Two ways to embed pi from a host program: in-process (`AgentSession` / `createAgentSession` from `@mariozechner/pi-coding-agent`) or subprocess (`RpcClient` from the same package, which spawns a `pi --mode rpc` child). All cites against pi-mono at the current pin (`v0.85.1`, `d981de12`). SDK doc: `packages/coding-agent/docs/sdk.md`.
+Two ways to embed pi from a host program: in-process (`AgentSession` / `createAgentSession` from `@mariozechner/pi-coding-agent`) or subprocess (`RpcClient` from the same package, which spawns a `pi --mode rpc` child). All cites against pi-mono at the current pin (`v0.87.1`, `f07218c4`). SDK doc: `packages/coding-agent/docs/sdk.md`.
 
 ## Decision matrix
 
@@ -15,13 +15,13 @@ Two ways to embed pi from a host program: in-process (`AgentSession` / `createAg
 | Hot-reload of pi changes | Re-import or restart host | Restart subprocess |
 | Recommended for | Node/TS hosts, embedding pi as a library | Cross-language hosts (Python, Go, Rust, …); process-level fault isolation |
 
-The pi docs say it directly (`docs/rpc.md:5`):
+The pi docs say it directly (`coding-agent/docs/rpc.md:5`):
 
-> **Note for Node.js/TypeScript users**: If you're building a Node.js application, consider using `AgentSession` directly from `@mariozechner/pi-coding-agent` instead of spawning a subprocess.
+> For an in-process Node.js or Bun integration, prefer the [SDK](sdk.md). For a subprocess-based TypeScript integration, prefer the exported `RpcClient`, which starts Pi, correlates responses, exposes typed command methods, and delivers events to listeners.
 
 ## In-process: `createAgentSession(options)`
 
-Entry point `createAgentSession` at `packages/coding-agent/src/core/sdk.ts:173`. Returns a `CreateAgentSessionResult` (`sdk.ts:91-98`):
+Entry point `createAgentSession` at `packages/coding-agent/src/core/sdk.ts:175`. Returns a `CreateAgentSessionResult` (`sdk.ts:93-100`):
 
 ```ts
 {
@@ -31,7 +31,7 @@ Entry point `createAgentSession` at `packages/coding-agent/src/core/sdk.ts:173`.
 }
 ```
 
-`CreateAgentSessionOptions` (`sdk.ts:39-88`) covers everything pi's CLI parses: `cwd`, `agentDir`, `authStorage`, `modelRegistry`, `model`, `thinkingLevel`, `scopedModels`, `noTools`, `tools`, `customTools`, `resourceLoader`, `sessionManager`, `settingsManager`, `sessionStartEvent`. Defaults are populated when omitted (see the JSDoc examples at `sdk.ts:172-200`).
+`CreateAgentSessionOptions` (`sdk.ts:41-90`) covers everything pi's CLI parses: `cwd`, `agentDir`, `authStorage`, `modelRegistry`, `model`, `thinkingLevel`, `scopedModels`, `noTools`, `tools`, `customTools`, `resourceLoader`, `sessionManager`, `settingsManager`, `sessionStartEvent`. Defaults are populated when omitted (see the JSDoc examples at `sdk.ts:174-202`).
 
 ### Minimal usage
 
@@ -44,7 +44,7 @@ await session.prompt("Hello");
 await session.waitForIdle();
 ```
 
-`session` is an `AgentSession` instance (defined in `core/agent-session.ts`). The full method surface — `prompt`, `steer`, `followUp`, `abort`, `compact`, `setModel`, `subscribe`, `waitForIdle`, `bindExtensions`, etc. — is the same code that the RPC dispatcher calls on the receiving end. (In-process `AgentSession.waitForIdle` at `agent-session.ts:1627` waits on the internal `isIdle` promise; the subprocess `RpcClient.waitForIdle` at `rpc-client.ts:464` instead resolves on the `agent_settled` event — **new in 0.80.x**, previously `agent_end`.)
+`session` is an `AgentSession` instance (defined in `core/agent-session.ts`). The full method surface — `prompt`, `steer`, `followUp`, `abort`, `compact`, `setModel`, `subscribe`, `waitForIdle`, `bindExtensions`, etc. — is the same code that the RPC dispatcher calls on the receiving end. (In-process `AgentSession.waitForIdle` at `agent-session.ts:2087` waits on the internal `isIdle` promise; the subprocess `RpcClient.waitForIdle` at `modes/rpc/rpc-client.ts:464` instead resolves on the `agent_settled` event — **new in 0.80.x**, previously `agent_end`.)
 
 ### Custom tools and inline extensions
 
@@ -63,19 +63,29 @@ The subprocess flow can't do this — extensions must be `.ts` files pi loads fr
 
 `DefaultResourceLoader` does the full pi discovery dance (paths, packages, settings.json). For tightly-controlled hosts, supply a hand-rolled `ResourceLoader` (interface in `core/resource-loader.ts:31-…`) that exposes only the resources you want.
 
-### `shouldStopAfterTurn` (lower-level: `@mariozechner/pi-agent-core`)
+### `finishTurn` (lower-level: `@earendil-works/pi-agent-core`) — replaced `shouldStopAfterTurn` in 0.87.0
 
-v0.72.0 added a post-turn stop callback on `AgentLoopConfig` in `packages/agent`. Signature at `packages/agent/src/types.ts:196`:
+**`shouldStopAfterTurn` no longer exists** (0.87.0 breaking change; it was added in v0.72.0). Its replacement is the `finishTurn` member (`packages/agent/src/types.ts:260`) of `AgentLoopConfig` (`:189`):
 
 ```ts
-shouldStopAfterTurn?: (context: ShouldStopAfterTurnContext) => boolean | Promise<boolean>;
+export type AgentTurnDecision = { action: "continue" } | { action: "end" };      // :143
+export type FinishTurn = (
+	turn: AgentTurnContext,
+	signal?: AbortSignal,
+) => AgentTurnDecision | void | Promise<AgentTurnDecision | undefined> | Promise<void>; // :151-154
 ```
 
-`ShouldStopAfterTurnContext` (`packages/agent/src/types.ts:126-135`) carries the just-completed `message`, `toolResults`, current `context`, and the `newMessages` array this loop run will return if it exits now. Returning `true` causes the agent loop to emit `agent_end` and exit **before polling the steering or follow-up queues**, **without starting another LLM call**. The current assistant response and tool executions finish normally first.
+`AgentTurnContext` (`packages/agent/src/types.ts:131-140`) carries the same fields the old context did: the just-completed assistant `message`, its `toolResults`, the current `context`, and `newMessages`, the messages this loop run returns if it exits now.
 
-Use case: graceful stop after a completed turn, e.g. before context gets too full or when a host has external reason to halt.
+Three differences from the old callback matter when you migrate:
 
-**Currently this is a `packages/agent` (pi-agent-core) primitive only.** It is **not** surfaced through `createAgentSession` or `RpcClient` in coding-agent (no occurrences in `packages/coding-agent/src/`). If you need it, either drop down to the lower-level agent loop directly or wire it through your own embedding code. Cite call site: `packages/agent/src/agent-loop.ts:238`.
+- **It runs BEFORE `turn_end`, and the decision is applied AFTER it** (called at `packages/agent/src/agent-loop.ts:251` and `:285`).
+- **It also receives error and aborted responses.** Those remain hard exits, so a migrated normal-response predicate must return `undefined` for them.
+- **It can force continuation.** `{ action: "end" }` stops the loop the way `true` used to. `{ action: "continue" }` guarantees one more provider request; queued tool results, steering, or follow-ups can satisfy that request without adding another. `undefined` keeps normal scheduling.
+
+**coding-agent now uses this hook itself.** `AgentSession._installAgentBoundaryHooks` (`packages/coding-agent/src/core/agent-session.ts:675-685`) wraps `agent.finishTurn` to dispatch the extension `turn_end` boundary, and chains any previously-installed `finishTurn`. A previous `{ action: "end" }` wins, and either side's continue request is honoured. An embedder that assigns `agent.finishTurn` **after** session construction replaces that wrapper and silently disables actionable `turn_end` for extensions. Assign it before, or not at all. (medium: read from the wrapper; not exercised.)
+
+The `pi-agent-core` changelog has the full before-and-after migration example.
 
 ## Subprocess: `RpcClient`
 
@@ -163,7 +173,7 @@ const unsubscribe = client.onEvent((event) => {
 
 - **`cliPath` defaults to `"dist/cli.js"`** — relative to the caller's cwd. If you're embedding from outside the pi-mono dev tree, supply an absolute path.
 - **`stdio: ["pipe", "pipe", "pipe"]`** means pi's stderr never reaches the user's terminal directly — it's collected by the client. Surface it on errors.
-- **The 30s RPC command-response timeout is hard-coded** (`rpc-client.ts:575`). Long compactions or slow LLMs can exceed it. No exposed override yet. (Distinct from `waitForIdle` / `promptAndWait`, which default to a 60s `timeout` **parameter** — `rpc-client.ts:464`, `:498` — and are overridable.)
+- **The 30s RPC command-response timeout is hard-coded** (`rpc-client.ts:575`). Long compactions or slow LLMs can exceed it. No exposed override yet. (Distinct from `waitForIdle` / `promptAndWait`, which default to a 60s `timeout` **parameter** — `modes/rpc/rpc-client.ts:464`, `:498` — and are overridable.)
 - **Concurrent `prompt` commands fail** with "agent already streaming" unless `streamingBehavior` is set. The client's typed `prompt(message, images?)` does NOT pass `streamingBehavior`; for steering, call `steer()` or use the lower-level command directly.
 - **Inline factory loading is in-process only.** You cannot pipe a factory function to a subprocess; extensions must be `.ts` files pi reads from disk.
 
